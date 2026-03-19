@@ -1,35 +1,38 @@
 import { makeToken, getUserIdFromRequest } from './auth.js'
-import { findUserByCpf, findUserById } from './data/users.js'
-import { getWallets } from './data/wallets.js'
-import { getCards, getCardById, SENSITIVE_DATA } from './data/cards.js'
-import { getTransactions } from './data/transactions.js'
-import { getNotifications } from './data/notifications.js'
-import { getPartners, getPartnerById, getFavoritePartners, ALL_PARTNERS } from './data/partners.js'
 import {
-  BANNERS, DISPUTES, REIMBURSEMENTS, BALANCE_REQUESTS,
-  APPROVALS, EXTERNAL_BENEFITS, REWARDS_SUMMARY,
-  FAQS, EXPENSES, ADVANCES, REPORTS, AVAILABLE_VOUCHERS, MY_VOUCHERS,
-  GEOFENCE_ZONES, DIGITAL_WALLET_CARDS,
-  getStaticSessions, getSecurityActivity,
-} from './data/static.js'
-
-// ─── In-memory state (resets on server restart) ──────────────────────────────
-const _state = {
-  favorites:            new Map(), // Map<userId, Set<partnerId>>
-  cardStatus:           new Map(), // Map<cardId, string>
-  approvalOverrides:    new Map(), // Map<approvalId, object>
-  geofenceActive:       new Map(), // Map<zoneId, boolean>
-  notifPrefs:           new Map(), // Map<userId, object>
-  benefitActive:        new Map(), // Map<benefitId, boolean>
-  rewardOverrides:      new Map(), // Map<userId, {totalPoints, level}>
-  purchasedVouchers:    new Set(), // Set<voucherId>
-  sessionDisputes:      [],
-  sessionReimbursements:[],
-  sessionBalanceReqs:   [],
-  sessionExpenses:      [],
-  sessionAdvances:      [],
-  sessionReports:       [],
-}
+  nextId, logMutation,
+  // Getters
+  findUserByCpf, findUserById,
+  getWallets, findWallet,
+  getCards, getCardById, getTransactions,
+  getNotifications, getNotifPrefs,
+  getPartners, getPartnerById, getFavoritePartners,
+  getApprovals, getDisputes, getReimbursements,
+  getBalanceRequests, getExpenses, getAdvances,
+  getReports, getAvailableVouchers, getMyVouchers,
+  getGeofenceZones, getDigitalWalletCards,
+  getExternalBenefits, getRewardsSummary,
+  getSensitiveData, getScheduledDeposits,
+  getBanners, getFaqs,
+  getStaticSessionsList, getSecurityActivityList,
+  // Mutators
+  deductWallet, creditWallet, addTransaction,
+  setCardStatus, addCard, setCardPin, getCardPin, addCardReplacement,
+  markNotifRead, markAllNotifsRead, setNotifPrefs,
+  toggleFavorite,
+  addDispute, addReimbursement,
+  addBalanceRequest, updateBalanceRequestStatus,
+  approveAction, rejectAction,
+  addExpense, deleteExpense,
+  addAdvance, addReport, submitReport,
+  buyVoucher,
+  addGeofenceZone, removeGeofenceZone, toggleGeofenceZone,
+  updateWalletLimit, addScheduledDeposit,
+  addToDigitalWallet, removeFromDigitalWallet,
+  activateBenefit, redeemReward, reclassifyTransaction,
+  trackLogin, trackLogout,
+  updateUserPassword, resetFailedAttempts,
+} from './state.js'
 
 // Tokens OTP / device válidos (espelho do mock Flutter)
 const VALID_OTP_CODE    = '1234'
@@ -42,36 +45,19 @@ function uid(context) {
   return getUserIdFromRequest(context.request)
 }
 
-// ─── Helper: gera ID único para mutations ────────────────────────────────────
-let _seq = 1
-function nextId(prefix = 'id') {
-  return `${prefix}-${Date.now()}-${_seq++}`
-}
-
 // ─── Helper: monta Transaction mock ──────────────────────────────────────────
-function makeTx(prefix, descricao, amount, walletId = 'w1') {
+function makeTx(prefix, descricao, amount, walletId = 'w1', categoria = 'Pagamento') {
   return {
     id: nextId(prefix),
     descricao,
     valor: -amount,
+    tipo: 'debito',
     data: new Date().toISOString(),
-    direcao: 'debito',
     status: 'aprovada',
-    categoria: 'Pagamento',
-    estabelecimento: descricao,
+    categoria,
+    merchant: descricao,
     walletId,
-    walletTipo: 'flexivel',
-    nsu: null,
-    codigoAutorizacao: null,
-    cnpjEstabelecimento: null,
-    enderecoEstabelecimento: null,
-    cartaoFinal: null,
-    bandeira: null,
-    mcc: null,
-    mccDescricao: null,
-    parcelas: null,
-    valorParcela: null,
-    nomePortador: null,
+    walletNome: null,
   }
 }
 
@@ -80,7 +66,7 @@ const ok = (extra = {}) => ({ success: true, message: null, ...extra })
 
 export const resolvers = {
   // ══════════════════════════════════════════════════════════════════
-  //  QUERIES
+  //  QUERIES — all read from state
   // ══════════════════════════════════════════════════════════════════
   Query: {
 
@@ -98,8 +84,8 @@ export const resolvers = {
       }
     },
 
-    sessions: () => getStaticSessions(),
-    securityActivity: () => getSecurityActivity(),
+    sessions: () => getStaticSessionsList(),
+    securityActivity: () => getSecurityActivityList(),
 
     // ── Wallet ────────────────────────────────────────────────────
     wallets: (_, __, context) => getWallets(uid(context)),
@@ -166,8 +152,7 @@ export const resolvers = {
 
     // ── Cards ─────────────────────────────────────────────────────
     cards: (_, __, context) => {
-      const base = getCards(uid(context))
-      return base.map(c => _state.cardStatus.has(c.id) ? { ...c, status: _state.cardStatus.get(c.id) } : c)
+      return getCards(uid(context)).map(({ pin, ...c }) => c)
     },
 
     cardDelivery: (_, { id: cardId }) => ({
@@ -185,7 +170,7 @@ export const resolvers = {
     }),
 
     revealCard: (_, { id: cardId }) => {
-      const data = SENSITIVE_DATA[cardId]
+      const data = getSensitiveData()[cardId]
       if (data) return data
       return {
         numeroCompleto: `4000 0000 0000 ${cardId.replace(/\D/g, '').padEnd(4, '0').slice(0, 4)}`,
@@ -196,32 +181,23 @@ export const resolvers = {
     // ── Notifications ─────────────────────────────────────────────
     notifications: (_, __, context) => getNotifications(uid(context)),
 
-    notificationPreferences: (_, __, context) => {
-      const userId = uid(context)
-      return _state.notifPrefs.get(userId) ?? { pushEnabled: true, emailEnabled: true, smsEnabled: false }
-    },
+    notificationPreferences: (_, __, context) => getNotifPrefs(uid(context)),
 
     // ── Partners ──────────────────────────────────────────────────
     partners: (_, args) => getPartners(args),
     nearbyPartners: () => getPartners({}),
     partner: (_, { id }) => getPartnerById(id),
-
-    favoritePartners: (_, __, context) => {
-      const userId = uid(context)
-      const favSet = _state.favorites.get(userId) ?? new Set()
-      if (favSet.size === 0) return getFavoritePartners()
-      return ALL_PARTNERS.filter(p => favSet.has(p.id))
-    },
+    favoritePartners: (_, __, context) => getFavoritePartners(uid(context)),
 
     // ── Disputes ──────────────────────────────────────────────────
-    disputes: () => [...DISPUTES, ..._state.sessionDisputes],
+    disputes: () => getDisputes(),
 
     // ── Reimbursements ────────────────────────────────────────────
-    reimbursements: () => [...REIMBURSEMENTS, ..._state.sessionReimbursements],
+    reimbursements: () => getReimbursements(),
 
     // ── Balance Requests ──────────────────────────────────────────
     balanceRequests: (_, { walletId } = {}) => {
-      const all = [...BALANCE_REQUESTS, ..._state.sessionBalanceReqs]
+      const all = getBalanceRequests()
       return walletId ? all.filter(b => b.walletId === walletId) : all
     },
 
@@ -239,60 +215,48 @@ export const resolvers = {
 
     // ── Approvals ─────────────────────────────────────────────────
     approvals: (_, { status } = {}) => {
-      const all = APPROVALS.map(a => _state.approvalOverrides.has(a.id) ? { ...a, ..._state.approvalOverrides.get(a.id) } : a)
+      const all = getApprovals()
       return status ? all.filter(a => a.status === status) : all
     },
 
-    approvalsPendingCount: () => {
-      return APPROVALS.filter(a => {
-        const ov = _state.approvalOverrides.get(a.id)
-        return (ov ? ov.status : a.status) === 'pendente'
-      }).length
-    },
+    approvalsPendingCount: () =>
+      getApprovals().filter(a => a.status === 'pendente').length,
 
     // ── External Benefits ─────────────────────────────────────────
-    externalBenefits: () => EXTERNAL_BENEFITS.map(b =>
-      _state.benefitActive.has(b.id) ? { ...b, ativo: _state.benefitActive.get(b.id) } : b
-    ),
-    explainBenefit: (_, { id }) => EXTERNAL_BENEFITS.find(b => b.id === id) ?? null,
+    externalBenefits: () => getExternalBenefits(),
+    explainBenefit: (_, { id }) => getExternalBenefits().find(b => b.id === id) ?? null,
 
     // ── Rewards ───────────────────────────────────────────────────
-    rewardsSummary: (_, __, context) => {
-      const userId = uid(context)
-      const ov = _state.rewardOverrides.get(userId)
-      return ov ? { ...REWARDS_SUMMARY, ...ov } : REWARDS_SUMMARY
-    },
+    rewardsSummary: (_, __, context) => getRewardsSummary(uid(context)),
 
     // ── Home ──────────────────────────────────────────────────────
-    productBanners: () => BANNERS,
+    productBanners: () => getBanners(),
 
     // ── Digital Wallet ────────────────────────────────────────────
-    digitalWalletCards: () => DIGITAL_WALLET_CARDS,
+    digitalWalletCards: () => getDigitalWalletCards(),
 
     // ── Help Center ───────────────────────────────────────────────
-    faqs: () => FAQS,
+    faqs: () => getFaqs(),
 
     // ── Expenses ──────────────────────────────────────────────────
-    expenses: () => [...EXPENSES, ..._state.sessionExpenses],
+    expenses: () => getExpenses(),
 
     // ── Advances ──────────────────────────────────────────────────
-    advances: () => [...ADVANCES, ..._state.sessionAdvances],
+    advances: () => getAdvances(),
 
     // ── Reports ───────────────────────────────────────────────────
-    expenseReports: () => [...REPORTS, ..._state.sessionReports],
+    expenseReports: () => getReports(),
 
     // ── Vouchers ──────────────────────────────────────────────────
-    availableVouchers: () => AVAILABLE_VOUCHERS,
-    myVouchers: () => MY_VOUCHERS,
+    availableVouchers: () => getAvailableVouchers(),
+    myVouchers: () => getMyVouchers(),
 
     // ── Geofencing ────────────────────────────────────────────────
-    geofenceZones: () => GEOFENCE_ZONES.map(z =>
-      _state.geofenceActive.has(z.id) ? { ...z, ativo: _state.geofenceActive.get(z.id) } : z
-    ),
+    geofenceZones: () => getGeofenceZones(),
   },
 
   // ══════════════════════════════════════════════════════════════════
-  //  MUTATIONS
+  //  MUTATIONS — all modify state
   // ══════════════════════════════════════════════════════════════════
   Mutation: {
 
@@ -303,6 +267,8 @@ export const resolvers = {
       if (!user) return null
       if (user.bloqueioDefinitivo) return null
       if (user.senha === null) {
+        trackLogin(user.id)
+        logMutation('login', `user:${user.id} | first-access`)
         return {
           accessToken: `origami-mock-${user.id}-first-access`,
           refreshToken: `origami-refresh-${user.id}`,
@@ -315,6 +281,9 @@ export const resolvers = {
         }
       }
       if (user.senha !== password) return null
+      trackLogin(user.id)
+      resetFailedAttempts(user.id)
+      logMutation('login', `user:${user.id} | success`)
       return {
         accessToken: makeToken(user.id),
         refreshToken: `origami-refresh-${user.id}`,
@@ -327,7 +296,12 @@ export const resolvers = {
       }
     },
 
-    logout: () => ok(),
+    logout: (_, { sessionId } = {}, context) => {
+      const userId = uid(context)
+      trackLogout(userId)
+      logMutation('logout', `user:${userId}`)
+      return ok()
+    },
 
     forgotPassword: (_, { cpf }) => {
       const user = findUserByCpf(cpf)
@@ -339,10 +313,21 @@ export const resolvers = {
       return { success: true, message: null, resetTicket: `mock-reset-ticket-${Date.now()}` }
     },
 
-    resetPassword: (_, { input: { resetTicket, newPassword } }) =>
-      resetTicket.length > 0 && newPassword.length >= 8 ? ok() : { success: false, message: 'Dados inválidos' },
+    resetPassword: (_, { input: { resetTicket, newPassword } }) => {
+      if (resetTicket.length > 0 && newPassword.length >= 8) {
+        logMutation('resetPassword', `ticket:${resetTicket.slice(0, 20)}...`)
+        return ok()
+      }
+      return { success: false, message: 'Dados inválidos' }
+    },
 
-    updatePassword: () => ok(),
+    updatePassword: (_, { input }) => {
+      if (input) {
+        updateUserPassword(input.cpf, input.newPassword)
+        logMutation('updatePassword', `cpf:${input.cpf}`)
+      }
+      return ok()
+    },
 
     validateCode: (_, { code }) =>
       code === VALID_OTP_CODE ? ok() : { success: false, message: 'Código inválido' },
@@ -368,33 +353,79 @@ export const resolvers = {
       recoveryCode === VALID_OTP_CODE && newPin.length >= 4 ? ok() : { success: false, message: 'Dados inválidos' },
 
     // ── Wallet ────────────────────────────────────────────────────
-    pixTransfer: (_, { input }) =>
-      makeTx('pix', `PIX para ${input.chavePix}`, input.amount, input.walletId),
-
-    processQrPayment: (_, { input }) =>
-      makeTx('qr', 'Pagamento QR Code', input.amount, input.walletId),
-
-    payBoleto: (_, { input }) =>
-      makeTx('bol', 'Pagamento de Boleto', input.amount, input.walletId),
-
-    mobileRecharge: (_, { input }) =>
-      makeTx('rec', `Recarga ${input.phone}`, input.amount, input.walletId),
-
-    reallocateBenefit: () => true,
-
-    scheduleDeposit: () => true,
-
-    updateWalletLimit: (_, { input }, context) => {
-      const wallets = getWallets(uid(context))
-      const wallet = wallets.find(w => w.id === input.walletId)
-      if (!wallet) return null
-      return { ...wallet, limiteDisponivel: input.newLimit }
+    pixTransfer: (_, { input }, context) => {
+      const userId = uid(context)
+      const wallet = deductWallet(userId, input.walletId, input.amount)
+      const tx = makeTx('pix', `PIX para ${input.chavePix}`, input.amount, input.walletId, 'PIX')
+      addTransaction(userId, tx)
+      logMutation('pixTransfer', `user:${userId} | wallet:${input.walletId} -R$${input.amount} → R$${wallet?.saldo ?? '?'}`)
+      return { ...tx, direcao: 'debito', estabelecimento: tx.merchant, walletTipo: null, nsu: null, codigoAutorizacao: null, cnpjEstabelecimento: null, enderecoEstabelecimento: null, cartaoFinal: null, bandeira: null, mcc: null, mccDescricao: null, parcelas: null, valorParcela: null, nomePortador: null }
     },
 
-    reclassifyTransaction: () => true,
+    processQrPayment: (_, { input }, context) => {
+      const userId = uid(context)
+      const wallet = deductWallet(userId, input.walletId, input.amount)
+      const tx = makeTx('qr', 'Pagamento QR Code', input.amount, input.walletId, 'QR Code')
+      addTransaction(userId, tx)
+      logMutation('processQrPayment', `user:${userId} | wallet:${input.walletId} -R$${input.amount} → R$${wallet?.saldo ?? '?'}`)
+      return { ...tx, direcao: 'debito', estabelecimento: tx.merchant, walletTipo: null, nsu: null, codigoAutorizacao: null, cnpjEstabelecimento: null, enderecoEstabelecimento: null, cartaoFinal: null, bandeira: null, mcc: null, mccDescricao: null, parcelas: null, valorParcela: null, nomePortador: null }
+    },
 
-    cashOut: (_, { input }) =>
-      makeTx('cashout', 'Saque bancário', input.amount, input.walletId),
+    payBoleto: (_, { input }, context) => {
+      const userId = uid(context)
+      const wallet = deductWallet(userId, input.walletId, input.amount)
+      const tx = makeTx('bol', 'Pagamento de Boleto', input.amount, input.walletId, 'Boleto')
+      addTransaction(userId, tx)
+      logMutation('payBoleto', `user:${userId} | wallet:${input.walletId} -R$${input.amount} → R$${wallet?.saldo ?? '?'}`)
+      return { ...tx, direcao: 'debito', estabelecimento: tx.merchant, walletTipo: null, nsu: null, codigoAutorizacao: null, cnpjEstabelecimento: null, enderecoEstabelecimento: null, cartaoFinal: null, bandeira: null, mcc: null, mccDescricao: null, parcelas: null, valorParcela: null, nomePortador: null }
+    },
+
+    mobileRecharge: (_, { input }, context) => {
+      const userId = uid(context)
+      const wallet = deductWallet(userId, input.walletId, input.amount)
+      const tx = makeTx('rec', `Recarga ${input.phone}`, input.amount, input.walletId, 'Recarga')
+      addTransaction(userId, tx)
+      logMutation('mobileRecharge', `user:${userId} | wallet:${input.walletId} -R$${input.amount} → R$${wallet?.saldo ?? '?'}`)
+      return { ...tx, direcao: 'debito', estabelecimento: tx.merchant, walletTipo: null, nsu: null, codigoAutorizacao: null, cnpjEstabelecimento: null, enderecoEstabelecimento: null, cartaoFinal: null, bandeira: null, mcc: null, mccDescricao: null, parcelas: null, valorParcela: null, nomePortador: null }
+    },
+
+    reallocateBenefit: (_, { input }, context) => {
+      const userId = uid(context)
+      const from = deductWallet(userId, input.fromWalletId, input.amount)
+      const to = creditWallet(userId, input.toWalletId, input.amount)
+      logMutation('reallocateBenefit', `user:${userId} | ${input.fromWalletId} -R$${input.amount} → ${input.toWalletId} +R$${input.amount} | from:R$${from?.saldo ?? '?'} to:R$${to?.saldo ?? '?'}`)
+      return !!(from && to)
+    },
+
+    scheduleDeposit: (_, { input }, context) => {
+      const userId = uid(context)
+      addScheduledDeposit(userId, input.walletId, input.amount, input.scheduledDate)
+      logMutation('scheduleDeposit', `user:${userId} | wallet:${input.walletId} R$${input.amount} on ${input.scheduledDate}`)
+      return true
+    },
+
+    updateWalletLimit: (_, { input }, context) => {
+      const userId = uid(context)
+      const wallet = updateWalletLimit(userId, input.walletId, input.newLimit)
+      logMutation('updateWalletLimit', `user:${userId} | wallet:${input.walletId} → limit:R$${input.newLimit}`)
+      return wallet ? { ...wallet } : null
+    },
+
+    reclassifyTransaction: (_, { input }, context) => {
+      const userId = uid(context)
+      const ok = reclassifyTransaction(userId, input.transactionId, input.newCategory)
+      logMutation('reclassifyTransaction', `user:${userId} | tx:${input.transactionId} → ${input.newCategory}`)
+      return ok
+    },
+
+    cashOut: (_, { input }, context) => {
+      const userId = uid(context)
+      const wallet = deductWallet(userId, input.walletId, input.amount)
+      const tx = makeTx('cashout', 'Saque bancário', input.amount, input.walletId, 'Saque')
+      addTransaction(userId, tx)
+      logMutation('cashOut', `user:${userId} | wallet:${input.walletId} -R$${input.amount} → R$${wallet?.saldo ?? '?'}`)
+      return { ...tx, direcao: 'debito', estabelecimento: tx.merchant, walletTipo: null, nsu: null, codigoAutorizacao: null, cnpjEstabelecimento: null, enderecoEstabelecimento: null, cartaoFinal: null, bandeira: null, mcc: null, mccDescricao: null, parcelas: null, valorParcela: null, nomePortador: null }
+    },
 
     pixCashOutPreview: (_, { input }) => ({
       chavePix: input.chavePix,
@@ -409,8 +440,15 @@ export const resolvers = {
       previewId: nextId('preview'),
     }),
 
-    executePixCashOut: (_, { input }) =>
-      makeTx('cashout', `PIX Cash Out para ${input.chavePix}`, input.amount, input.walletId),
+    executePixCashOut: (_, { input }, context) => {
+      const userId = uid(context)
+      const totalDebited = parseFloat((input.amount * 1.015).toFixed(2))
+      const wallet = deductWallet(userId, input.walletId, totalDebited)
+      const tx = makeTx('cashout', `PIX Cash Out para ${input.chavePix}`, input.amount, input.walletId, 'PIX Cash Out')
+      addTransaction(userId, tx)
+      logMutation('executePixCashOut', `user:${userId} | wallet:${input.walletId} -R$${totalDebited} (fee incl.) → R$${wallet?.saldo ?? '?'}`)
+      return { ...tx, direcao: 'debito', estabelecimento: tx.merchant, walletTipo: null, nsu: null, codigoAutorizacao: null, cnpjEstabelecimento: null, enderecoEstabelecimento: null, cartaoFinal: null, bandeira: null, mcc: null, mccDescricao: null, parcelas: null, valorParcela: null, nomePortador: null }
+    },
 
     statementExport: (_, { input }) => ({
       url: `https://mock.origami.com.br/statements/extrato.${input.format.toLowerCase()}`,
@@ -419,22 +457,26 @@ export const resolvers = {
 
     // ── Cards ─────────────────────────────────────────────────────
     blockCard: (_, { id: cardId }, context) => {
-      _state.cardStatus.set(cardId, 'bloqueado')
-      const card = getCardById(uid(context), cardId)
-      return { ...card, status: 'bloqueado' }
+      const userId = uid(context)
+      const card = setCardStatus(userId, cardId, 'bloqueado')
+      logMutation('blockCard', `user:${userId} | card:${cardId} → bloqueado`)
+      const { pin, ...safe } = card || getCardById(userId, cardId)
+      return { ...safe, status: 'bloqueado' }
     },
 
     unblockCard: (_, { id: cardId }, context) => {
-      _state.cardStatus.set(cardId, 'ativo')
-      const card = getCardById(uid(context), cardId)
-      return { ...card, status: 'ativo' }
+      const userId = uid(context)
+      const card = setCardStatus(userId, cardId, 'ativo')
+      logMutation('unblockCard', `user:${userId} | card:${cardId} → ativo`)
+      const { pin, ...safe } = card || getCardById(userId, cardId)
+      return { ...safe, status: 'ativo' }
     },
 
     createVirtualCard: (_, __, context) => {
       const userId = uid(context)
       const user = findUserById(userId)
       const name = user.nome.split(' ').map((w, i) => i < 2 ? w : w[0]).join(' ').toUpperCase()
-      return {
+      const newCard = {
         id: nextId('c'),
         tipo: 'virtual',
         status: 'ativo',
@@ -444,93 +486,148 @@ export const resolvers = {
         validade: '06/30',
         carteirasVinculadas: ['Flexível'],
         contactless: false,
+        pin: '0000',
       }
+      addCard(userId, newCard)
+      logMutation('createVirtualCard', `user:${userId} | card:${newCard.id} final:${newCard.ultimosDigitos}`)
+      const { pin, ...safe } = newCard
+      return safe
     },
 
     activateCard: (_, { id: cardId }, context) => {
-      _state.cardStatus.set(cardId, 'ativo')
-      const card = getCardById(uid(context), cardId)
-      return { ...card, status: 'ativo' }
+      const userId = uid(context)
+      const card = setCardStatus(userId, cardId, 'ativo')
+      logMutation('activateCard', `user:${userId} | card:${cardId} → ativo`)
+      const { pin, ...safe } = card || getCardById(userId, cardId)
+      return { ...safe, status: 'ativo' }
     },
 
-    validateCardPin: (_, { id, pin }) =>
-      ok(),
+    validateCardPin: (_, { id, pin }) => ok(),
 
-    changeCardPin: (_, { id, newPin }) => {
+    changeCardPin: (_, { id, newPin }, context) => {
       if (['0000', '1234', '4321'].includes(newPin)) {
         return { success: false, message: 'PIN inválido. Escolha outro.' }
       }
+      const userId = uid(context)
+      setCardPin(userId, id, newPin)
+      logMutation('changeCardPin', `user:${userId} | card:${id} → PIN changed`)
       return ok()
     },
 
-    requestCardReplacement: () =>
-      ({ success: true, message: `REP-${Date.now().toString().slice(-6)}` }),
+    requestCardReplacement: (_, { id, reason }, context) => {
+      const userId = uid(context)
+      addCardReplacement(id, reason)
+      setCardStatus(userId, id, 'substituicao_solicitada')
+      const protocol = `REP-${Date.now().toString().slice(-6)}`
+      logMutation('requestCardReplacement', `user:${userId} | card:${id} reason:${reason} protocol:${protocol}`)
+      return { success: true, message: protocol }
+    },
 
     toggleInternationalMode: () => true,
 
     // ── Notifications ─────────────────────────────────────────────
     markNotificationRead: (_, { id }, context) => {
-      const notifs = getNotifications(uid(context))
-      const n = notifs.find(x => x.id === id)
-      if (n) n.lida = true
-      return { success: true, message: null }
+      const userId = uid(context)
+      markNotifRead(userId, id)
+      logMutation('markNotificationRead', `user:${userId} | notif:${id} → lida=true`)
+      return ok()
     },
+
     markAllNotificationsRead: (_, __, context) => {
-      getNotifications(uid(context)).forEach(n => { n.lida = true })
-      return { success: true, message: null }
+      const userId = uid(context)
+      markAllNotifsRead(userId)
+      logMutation('markAllNotificationsRead', `user:${userId} | all → lida=true`)
+      return ok()
     },
 
     updateNotificationPreferences: (_, { input }, context) => {
       const userId = uid(context)
-      _state.notifPrefs.set(userId, input)
+      setNotifPrefs(userId, input)
+      logMutation('updateNotificationPreferences', `user:${userId} | push:${input.pushEnabled} email:${input.emailEnabled} sms:${input.smsEnabled}`)
       return input
     },
 
     // ── Partners ──────────────────────────────────────────────────
     toggleFavoritePartner: (_, { partnerId: id }, context) => {
       const userId = uid(context)
-      if (!_state.favorites.has(userId)) _state.favorites.set(userId, new Set())
-      const favs = _state.favorites.get(userId)
-      if (favs.has(id)) { favs.delete(id); return false }
-      favs.add(id); return true
+      const result = toggleFavorite(userId, id)
+      logMutation('toggleFavoritePartner', `user:${userId} | partner:${id} → ${result ? 'added' : 'removed'}`)
+      return result
     },
 
     // ── Disputes ──────────────────────────────────────────────────
     submitDispute: (_, { transactionId, description, amount, merchantName }) => {
-      const d = { id: nextId('disp'), transactionId, description, amount, merchantName: merchantName ?? 'Estabelecimento', status: 'aberta', date: new Date().toISOString(), events: [{ date: new Date().toISOString(), description: 'Contestação aberta', status: 'aberta' }] }
-      _state.sessionDisputes.push(d)
+      const d = {
+        id: nextId('disp'),
+        transactionId,
+        description,
+        amount,
+        merchantName: merchantName ?? 'Estabelecimento',
+        status: 'aberta',
+        date: new Date().toISOString(),
+        events: [{ date: new Date().toISOString(), description: 'Contestação aberta', status: 'aberta' }],
+      }
+      addDispute(d)
+      logMutation('submitDispute', `disp:${d.id} | tx:${transactionId} R$${amount}`)
       return d
     },
 
     // ── Reimbursements ────────────────────────────────────────────
     submitReimbursement: (_, { category, amount, date, description, receiptUrl }) => {
-      const r = { id: nextId('reimb'), category, amount, date, description, status: 'aguardando', receiptUrl: receiptUrl ?? null, resolvedAt: null }
-      _state.sessionReimbursements.push(r)
+      const r = {
+        id: nextId('reimb'),
+        category, amount, date, description,
+        status: 'aguardando',
+        receiptUrl: receiptUrl ?? null,
+        resolvedAt: null,
+      }
+      addReimbursement(r)
+      logMutation('submitReimbursement', `reimb:${r.id} | R$${amount} cat:${category}`)
       return r
     },
 
     // ── Balance Requests ──────────────────────────────────────────
     createBalanceRequest: (_, { input }) => {
-      const r = { id: nextId('br'), walletId: input.walletId, amount: input.amount, status: 'aguardando', justificativa: input.justificativa ?? null, createdAt: new Date().toISOString(), updatedAt: null, approvedBy: null, rejectionReason: null }
-      _state.sessionBalanceReqs.push(r)
+      const r = {
+        id: nextId('br'),
+        walletId: input.walletId,
+        amount: input.amount,
+        status: 'aguardando',
+        justificativa: input.justificativa ?? null,
+        createdAt: new Date().toISOString(),
+        updatedAt: null,
+        approvedBy: null,
+        rejectionReason: null,
+      }
+      addBalanceRequest(r)
+      logMutation('createBalanceRequest', `br:${r.id} | wallet:${input.walletId} R$${input.amount}`)
       return r
     },
 
     updateBalanceRequest: (_, { input }) => {
-      const req = BALANCE_REQUESTS.find(b => b.id === input.requestId)
-      if (!req) return null
-      return {
-        ...req,
-        status: input.status,
-        updatedAt: new Date().toISOString(),
-        rejectionReason: input.rejectionReason ?? null,
-      }
+      const req = updateBalanceRequestStatus(input.requestId, input.status, input.rejectionReason)
+      logMutation('updateBalanceRequest', `br:${input.requestId} → ${input.status}${input.rejectionReason ? ' reason:' + input.rejectionReason : ''}`)
+      return req
     },
 
     // ── Digital Wallet ────────────────────────────────────────────
-    addToGooglePay: () => true,
-    addToSamsungPay: () => true,
-    removeFromDigitalWallet: () => true,
+    addToGooglePay: (_, { cardId }) => {
+      const ok = addToDigitalWallet(cardId, 'google_pay')
+      logMutation('addToGooglePay', `card:${cardId} → ${ok ? 'provisioned' : 'failed'}`)
+      return ok
+    },
+
+    addToSamsungPay: (_, { cardId }) => {
+      const ok = addToDigitalWallet(cardId, 'samsung_pay')
+      logMutation('addToSamsungPay', `card:${cardId} → ${ok ? 'provisioned' : 'failed'}`)
+      return ok
+    },
+
+    removeFromDigitalWallet: (_, { cardId, provider }) => {
+      const ok = removeFromDigitalWallet(cardId, provider)
+      logMutation('removeFromDigitalWallet', `card:${cardId} provider:${provider} → ${ok ? 'removed' : 'not found'}`)
+      return ok
+    },
 
     // ── KYC ───────────────────────────────────────────────────────
     validateCpfBigDataCorp: () => true,
@@ -559,17 +656,15 @@ export const resolvers = {
 
     // ── Approvals ─────────────────────────────────────────────────
     approveAction: (_, { id }) => {
-      const item = APPROVALS.find(a => a.id === id) ?? APPROVALS[0]
-      const updated = { status: 'aprovada', decidedAt: new Date().toISOString(), decidedBy: 'mock-manager', rejectionReason: null }
-      _state.approvalOverrides.set(id, updated)
-      return { ...item, ...updated }
+      const item = approveAction(id)
+      logMutation('approveAction', `appr:${id} → aprovada at ${item?.decidedAt ?? 'n/a'}`)
+      return item ?? getApprovals()[0]
     },
 
     rejectAction: (_, { id, reason }) => {
-      const item = APPROVALS.find(a => a.id === id) ?? APPROVALS[0]
-      const updated = { status: 'reprovado', decidedAt: new Date().toISOString(), decidedBy: 'mock-manager', rejectionReason: reason }
-      _state.approvalOverrides.set(id, updated)
-      return { ...item, ...updated }
+      const item = rejectAction(id, reason)
+      logMutation('rejectAction', `appr:${id} → reprovado reason:${reason}`)
+      return item ?? getApprovals()[0]
     },
 
     // ── Feedback ──────────────────────────────────────────────────
@@ -578,21 +673,34 @@ export const resolvers = {
     // ── Rewards ───────────────────────────────────────────────────
     redeemReward: (_, { rewardId } = {}, context) => {
       const userId = uid(context)
-      const current = _state.rewardOverrides.get(userId) ?? { totalPoints: REWARDS_SUMMARY.totalPoints, level: REWARDS_SUMMARY.level }
-      const cost = REWARDS_SUMMARY.availableRewards?.find(r => r.id === rewardId)?.points ?? 500
-      const newPoints = Math.max(0, current.totalPoints - cost)
-      _state.rewardOverrides.set(userId, { ...current, totalPoints: newPoints })
+      const newPoints = redeemReward(userId, rewardId)
+      logMutation('redeemReward', `user:${userId} | reward:${rewardId} → pts:${newPoints}`)
       return ok()
     },
 
     // ── Expenses ──────────────────────────────────────────────────
     createExpense: (_, { input }) => {
-      const e = { id: nextId('exp'), description: input.description, amount: input.amount, date: input.date, category: input.category, receiptUrl: input.receiptUrl ?? null, lat: input.lat ?? null, lng: input.lng ?? null, merchant: input.merchant ?? null }
-      _state.sessionExpenses.push(e)
+      const e = {
+        id: nextId('exp'),
+        description: input.description,
+        amount: input.amount,
+        date: input.date,
+        category: input.category,
+        receiptUrl: input.receiptUrl ?? null,
+        lat: input.lat ?? null,
+        lng: input.lng ?? null,
+        merchant: input.merchant ?? null,
+      }
+      addExpense(e)
+      logMutation('createExpense', `exp:${e.id} | R$${e.amount} cat:${e.category}`)
       return e
     },
 
-    deleteExpense: () => ok(),
+    deleteExpense: (_, { id }) => {
+      const removed = deleteExpense(id)
+      logMutation('deleteExpense', `exp:${id} → ${removed ? 'removed' : 'not found'}`)
+      return removed ? ok() : { success: false, message: 'Despesa não encontrada' }
+    },
 
     // ── Expenses — OCR simulation ─────────────────────────────────
     ocrReceipt: () => {
@@ -618,43 +726,98 @@ export const resolvers = {
 
     // ── Advances ──────────────────────────────────────────────────
     createAdvance: (_, { input }) => {
-      const a = { id: nextId('adv'), amount: input.amount, reason: input.reason, status: 'pendente', requestedAt: new Date().toISOString(), resolvedAt: null, approverNote: null }
-      _state.sessionAdvances.push(a)
+      const a = {
+        id: nextId('adv'),
+        amount: input.amount,
+        reason: input.reason,
+        status: 'pendente',
+        requestedAt: new Date().toISOString(),
+        resolvedAt: null,
+        approverNote: null,
+      }
+      addAdvance(a)
+      logMutation('createAdvance', `adv:${a.id} | R$${a.amount} reason:${a.reason}`)
       return a
     },
 
     // ── Reports ───────────────────────────────────────────────────
     createExpenseReport: (_, { input }) => {
-      const r = { id: nextId('rep'), title: input.title, period: input.period, totalAmount: 0, expenseCount: input.expenseIds.length, status: 'rascunho', createdAt: new Date().toISOString(), submittedAt: null, expenseIds: input.expenseIds }
-      _state.sessionReports.push(r)
+      // Calculate total from expense IDs
+      const expenses = getExpenses()
+      const matchedExpenses = expenses.filter(e => input.expenseIds.includes(e.id))
+      const totalAmount = matchedExpenses.reduce((sum, e) => sum + e.amount, 0)
+
+      const r = {
+        id: nextId('rep'),
+        title: input.title,
+        period: input.period,
+        totalAmount: parseFloat(totalAmount.toFixed(2)),
+        expenseCount: input.expenseIds.length,
+        status: 'rascunho',
+        createdAt: new Date().toISOString(),
+        submittedAt: null,
+        expenseIds: input.expenseIds,
+      }
+      addReport(r)
+      logMutation('createExpenseReport', `rep:${r.id} | ${r.title} R$${r.totalAmount} (${r.expenseCount} expenses)`)
       return r
     },
 
-    submitExpenseReport: () => ok(),
-
-    // ── Vouchers ──────────────────────────────────────────────────
-    buyVoucher: (_, { input }) => {
-      _state.purchasedVouchers.add(input.voucherId)
-      const voucher = AVAILABLE_VOUCHERS.find(v => v.id === input.voucherId) ?? AVAILABLE_VOUCHERS[0]
-      return { ...voucher, status: 'purchased', code: `MOCK${Date.now().toString().slice(-6)}` }
+    submitExpenseReport: (_, { id }) => {
+      const submitted = submitReport(id)
+      logMutation('submitExpenseReport', `rep:${id} → ${submitted ? 'submetido' : 'not found'}`)
+      return submitted ? ok() : { success: false, message: 'Relatório não encontrado' }
     },
 
-    analyseVoucher: (_, { code }) =>
-      AVAILABLE_VOUCHERS[0] ? { ...AVAILABLE_VOUCHERS[0], code } : null,
+    // ── Vouchers ──────────────────────────────────────────────────
+    buyVoucher: (_, { input }, context) => {
+      const userId = uid(context)
+      const purchased = buyVoucher(input.voucherId, input.walletId, userId)
+      if (purchased) {
+        logMutation('buyVoucher', `user:${userId} | voucher:${input.voucherId} wallet:${input.walletId} → code:${purchased.code}`)
+      }
+      return purchased ?? getAvailableVouchers()[0]
+    },
+
+    analyseVoucher: (_, { code }) => {
+      const vouchers = getAvailableVouchers()
+      return vouchers[0] ? { ...vouchers[0], code } : null
+    },
 
     // ── Geofencing ────────────────────────────────────────────────
-    addGeofenceZone: (_, { input }) => ({ id: input.id }),
-    removeGeofenceZone: () => true,
+    addGeofenceZone: (_, { input }) => {
+      const zone = {
+        id: input.id,
+        name: input.name,
+        description: input.description ?? null,
+        latitude: input.latitude,
+        longitude: input.longitude,
+        radiusMeters: input.radiusMeters,
+        isActive: input.isActive ?? true,
+        partnerId: input.partnerId ?? null,
+        type: input.type ?? 'custom',
+      }
+      addGeofenceZone(zone)
+      logMutation('addGeofenceZone', `zone:${zone.id} | ${zone.name} (${zone.latitude},${zone.longitude}) r=${zone.radiusMeters}m`)
+      return { id: zone.id }
+    },
 
-    toggleGeofenceZone: (_, { id }) => {
-      const current = _state.geofenceActive.has(id) ? _state.geofenceActive.get(id) : (GEOFENCE_ZONES.find(z => z.id === id)?.ativo ?? true)
-      _state.geofenceActive.set(id, !current)
-      return !current
+    removeGeofenceZone: (_, { id }) => {
+      const removed = removeGeofenceZone(id)
+      logMutation('removeGeofenceZone', `zone:${id} → ${removed ? 'removed' : 'not found'}`)
+      return removed
+    },
+
+    toggleGeofenceZone: (_, { id, active }) => {
+      const result = toggleGeofenceZone(id, active)
+      logMutation('toggleGeofenceZone', `zone:${id} → isActive:${result}`)
+      return result ?? false
     },
 
     // ── External Benefits ─────────────────────────────────────────
     activateBenefit: (_, { id }) => {
-      _state.benefitActive.set(id, true)
+      activateBenefit(id)
+      logMutation('activateBenefit', `benefit:${id} → ativo:true`)
       return ok()
     },
   },
