@@ -40,7 +40,11 @@ const yoga = createYoga({
     {
       onExecute({ args }) {
         const op = args.document?.definitions?.[0]
-        const opName = op?.name?.value ?? '(anonymous)'
+        let opName = op?.name?.value ?? null
+        if (!opName && op?.selectionSet?.selections?.length) {
+          opName = op.selectionSet.selections.map(s => s.name?.value).filter(Boolean).join('+')
+        }
+        opName = opName || '(anonymous)'
         const opType = op?.operation ?? 'query'
         const auth = args.contextValue?.request?.headers?.get('authorization') ?? '-'
         const userId = auth.startsWith('Bearer origami-mock-')
