@@ -33,6 +33,7 @@ import {
   activateBenefit, redeemReward, reclassifyTransaction,
   trackLogin, trackLogout,
   updateUserPassword, resetFailedAttempts,
+  shouldSimulateFailure,
 } from './state.js'
 
 // ── Flow token state ──────────────────────────────────────────────────────────
@@ -296,8 +297,14 @@ export const resolvers = {
     login: (_, { input }) => {
       const { cpf, password } = input
       const user = findUserByCpf(cpf)
-      if (!user) return null
-      if (user.bloqueioDefinitivo) return null
+      if (!user) {
+        logMutation('login', `FAILED: cpf ${cpf} not found`)
+        return null
+      }
+      if (user.bloqueioDefinitivo) {
+        logMutation('login', `FAILED: user:${user.id} blocked permanently`)
+        return null
+      }
       if (user.senha === null) {
         trackLogin(user.id)
         logMutation('login', `user:${user.id} | first-access`)
@@ -312,7 +319,12 @@ export const resolvers = {
           },
         }
       }
-      if (user.senha !== password) return null
+      // Simulate password validation (in production this would be bcrypt/argon2)
+      const passwordValid = password === user.senha // Mock: plaintext comparison
+      if (!passwordValid) {
+        logMutation('login', `FAILED: wrong password for cpf ${cpf} (user:${user.id})`)
+        return null
+      }
       trackLogin(user.id)
       resetFailedAttempts(user.id)
       logMutation('login', `user:${user.id} | success`)
@@ -387,6 +399,10 @@ export const resolvers = {
     // ── Wallet ────────────────────────────────────────────────────
     pixTransfer: (_, { input }, context) => {
       const userId = uid(context)
+      if (shouldSimulateFailure()) {
+        logMutation('pixTransfer', `user:${userId} | SIMULATED FAILURE`)
+        return null
+      }
       const wallet = deductWallet(userId, input.walletId, input.amount)
       const tx = makeTx('pix', `PIX para ${input.chavePix}`, input.amount, input.walletId, 'PIX')
       addTransaction(userId, tx)
@@ -396,6 +412,10 @@ export const resolvers = {
 
     processQrPayment: (_, { input }, context) => {
       const userId = uid(context)
+      if (shouldSimulateFailure()) {
+        logMutation('processQrPayment', `user:${userId} | SIMULATED FAILURE`)
+        return null
+      }
       const wallet = deductWallet(userId, input.walletId, input.amount)
       const tx = makeTx('qr', 'Pagamento QR Code', input.amount, input.walletId, 'QR Code')
       addTransaction(userId, tx)
@@ -405,6 +425,10 @@ export const resolvers = {
 
     payBoleto: (_, { input }, context) => {
       const userId = uid(context)
+      if (shouldSimulateFailure()) {
+        logMutation('payBoleto', `user:${userId} | SIMULATED FAILURE`)
+        return null
+      }
       const wallet = deductWallet(userId, input.walletId, input.amount)
       const tx = makeTx('bol', 'Pagamento de Boleto', input.amount, input.walletId, 'Boleto')
       addTransaction(userId, tx)
@@ -414,6 +438,10 @@ export const resolvers = {
 
     mobileRecharge: (_, { input }, context) => {
       const userId = uid(context)
+      if (shouldSimulateFailure()) {
+        logMutation('mobileRecharge', `user:${userId} | SIMULATED FAILURE`)
+        return null
+      }
       const wallet = deductWallet(userId, input.walletId, input.amount)
       const tx = makeTx('rec', `Recarga ${input.phone}`, input.amount, input.walletId, 'Recarga')
       addTransaction(userId, tx)
@@ -452,6 +480,10 @@ export const resolvers = {
 
     cashOut: (_, { input }, context) => {
       const userId = uid(context)
+      if (shouldSimulateFailure()) {
+        logMutation('cashOut', `user:${userId} | SIMULATED FAILURE`)
+        return null
+      }
       const wallet = deductWallet(userId, input.walletId, input.amount)
       const tx = makeTx('cashout', 'Saque bancário', input.amount, input.walletId, 'Saque')
       addTransaction(userId, tx)
@@ -474,6 +506,10 @@ export const resolvers = {
 
     executePixCashOut: (_, { input }, context) => {
       const userId = uid(context)
+      if (shouldSimulateFailure()) {
+        logMutation('executePixCashOut', `user:${userId} | SIMULATED FAILURE`)
+        return null
+      }
       const totalDebited = parseFloat((input.amount * 1.015).toFixed(2))
       const wallet = deductWallet(userId, input.walletId, totalDebited)
       const tx = makeTx('cashout', `PIX Cash Out para ${input.chavePix}`, input.amount, input.walletId, 'PIX Cash Out')

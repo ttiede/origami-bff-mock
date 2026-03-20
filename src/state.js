@@ -76,6 +76,22 @@ const state = {
   scheduledDeposits: [],   // [{ walletId, amount, scheduledDate, userId }]
 }
 
+// ─── Failure simulation ─────────────────────────────────────────────────────
+let _failureMode = { enabled: false, rate: 0.1 }
+
+export function setFailureMode(enabled, rate = 0.1) {
+  _failureMode = { enabled, rate }
+}
+
+export function shouldSimulateFailure() {
+  if (!_failureMode.enabled) return false
+  return Math.random() < _failureMode.rate
+}
+
+export function getFailureMode() {
+  return { ..._failureMode }
+}
+
 // ─── Sequence counter for IDs ───────────────────────────────────────────────
 let _seq = 1
 export function nextId(prefix = 'id') {

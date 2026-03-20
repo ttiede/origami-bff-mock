@@ -2,7 +2,7 @@ import { createServer } from 'node:http'
 import { createSchema, createYoga } from 'graphql-yoga'
 import { typeDefs } from './schema.js'
 import { resolvers } from './resolvers.js'
-import { reset, getStateSummary, getMutationStats } from './state.js'
+import { reset, getStateSummary, getMutationStats, setFailureMode, getFailureMode } from './state.js'
 
 const startedAt = Date.now()
 
@@ -140,6 +140,8 @@ function landingPage() {
       <tr><td><a href="/health">/health</a></td><td>GET</td><td>Health check + uptime + pr&oacute;ximo reset</td></tr>
       <tr><td><a href="/reset">/reset</a></td><td>GET</td><td>Reseta estado para dados iniciais</td></tr>
       <tr><td><a href="/status">/status</a></td><td>GET</td><td>Resumo do estado atual do sandbox</td></tr>
+      <tr><td><a href="/simulate-failures?rate=0.1">/simulate-failures?rate=N</a></td><td>GET</td><td>Habilita falhas simuladas (rate 0-1)</td></tr>
+      <tr><td><a href="/simulate-failures?off">/simulate-failures?off</a></td><td>GET</td><td>Desabilita falhas simuladas</td></tr>
     </table>
 
     <h2>Credenciais de Teste</h2>
@@ -286,6 +288,22 @@ const server = createServer((req, res) => {
     return
   }
 
+  // ─── Simulate failures endpoint ────────────────────────────────
+  if (req.method === 'GET' && req.url?.startsWith('/simulate-failures')) {
+    const url = new URL(req.url, `http://localhost:${PORT}`)
+    if (url.searchParams.has('off')) {
+      setFailureMode(false)
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
+      res.end(JSON.stringify({ success: true, failureMode: getFailureMode() }))
+    } else {
+      const rate = parseFloat(url.searchParams.get('rate') ?? '0.1')
+      setFailureMode(true, Math.max(0, Math.min(1, rate)))
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
+      res.end(JSON.stringify({ success: true, failureMode: getFailureMode() }))
+    }
+    return
+  }
+
   // ─── GraphQL ────────────────────────────────────────────────────
   yoga(req, res)
 })
@@ -300,6 +318,7 @@ server.listen(PORT, '0.0.0.0', () => {
 |  GET /reset   -> reset state to seeds                |
 |  GET /health  -> server health check                 |
 |  GET /status  -> state summary                       |
+|  GET /simulate-failures -> toggle failure sim        |
 |  Auto-reset every 60 minutes                         |
 +======================================================+
 Format: [HH:MM:SS.mmm] TYPE     OperationName                     | user:N
