@@ -89,8 +89,8 @@ export const resolvers = {
       }
     },
 
-    sessions: () => getStaticSessionsList(),
-    securityActivity: () => getSecurityActivityList(),
+    sessions: (_, __, context) => getStaticSessionsList(uid(context)),
+    securityActivity: (_, __, context) => getSecurityActivityList(uid(context)),
 
     // ── Wallet ────────────────────────────────────────────────────
     wallets: (_, __, context) => getWallets(uid(context)),
@@ -200,7 +200,7 @@ export const resolvers = {
 
     // ── Partners ──────────────────────────────────────────────────
     partners: (_, args) => getPartners(args),
-    nearbyPartners: () => getPartners({}),
+    nearbyPartners: (_, { lat, lng, radiusKm }) => getNearbyPartners(lat, lng, radiusKm ?? 5),
     partner: (_, { id }) => getPartnerById(id),
     favoritePartners: (_, __, context) => getFavoritePartners(uid(context)),
 
