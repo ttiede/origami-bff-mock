@@ -47,13 +47,29 @@ const yoga = createYoga({
           ? auth.replace('Bearer origami-mock-', 'user:')
           : auth !== '-' ? 'jwt' : 'anon'
         const ts = new Date().toISOString().slice(11, 23)
-        console.log(`[${ts}] ${opType.toUpperCase().padEnd(8)} ${opName.padEnd(35)} | ${userId}`)
+        const vars = args.variableValues && Object.keys(args.variableValues).length > 0
+          ? ` vars=${JSON.stringify(args.variableValues)}`
+          : ''
+        console.log(`[${ts}] ${opType.toUpperCase().padEnd(8)} ${opName.padEnd(35)} | ${userId}${vars}`)
       },
       onExecuteDone({ result }) {
+        const ts = new Date().toISOString().slice(11, 23)
         if (result?.errors?.length) {
           result.errors.forEach(e => {
-            console.error(`           ERROR: ${e.message}`)
+            console.error(`[${ts}] ERROR    ${e.message}`)
           })
+        }
+        // Log response summary (first 200 chars of data keys)
+        if (result?.data) {
+          const keys = Object.keys(result.data)
+          const summary = keys.map(k => {
+            const v = result.data[k]
+            if (v === null) return `${k}=null`
+            if (Array.isArray(v)) return `${k}=[${v.length} items]`
+            if (typeof v === 'object') return `${k}={...}`
+            return `${k}=${v}`
+          }).join(', ')
+          console.log(`[${ts}] RESPONSE ${summary}`)
         }
       },
     },
