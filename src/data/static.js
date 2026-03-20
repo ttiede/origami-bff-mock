@@ -2,10 +2,12 @@
 
 // ─── Home Banners ─────────────────────────────────────────────────────────────
 export const BANNERS = [
-  { id: 'b1', title: 'Cashback de 5% em\nrestaurantes!',    subtitle: 'Válido até 30/Jun',                gradientColors: [4285494682, 4287365808], iconCodePoint: 60216, route: '/partners' },
-  { id: 'b2', title: 'Antecipe seu FGTS\ncom taxa zero!',   subtitle: 'Condições especiais',               gradientColors: [4278224220, 4280496794], iconCodePoint: 57685, route: '/partners' },
-  { id: 'b3', title: 'Indique e ganhe\nR$ 50!',             subtitle: 'Por cada amigo que baixar o app',  gradientColors: [4293498165, 4288423452], iconCodePoint: 59375, route: '/referral' },
-  { id: 'b4', title: 'Seus vouchers\ncom desconto!',         subtitle: 'Até 40% OFF em parceiros',         gradientColors: [4279378368, 4279900114], iconCodePoint: 57649, route: '/vouchers' },
+  { id: 'b1', title: 'PIX sem taxas\npara você!',            subtitle: 'Transfira grátis até 30/Jun',       gradientColors: [4285494682, 4287365808], iconCodePoint: 60216, route: '/payments/pix' },
+  { id: 'b2', title: 'Seus vouchers\ncom desconto!',         subtitle: 'Até 40% OFF em parceiros',          gradientColors: [4278224220, 4280496794], iconCodePoint: 57649, route: '/vouchers' },
+  { id: 'b3', title: 'Resgate seus\npontos agora!',          subtitle: 'Cinema, iFood, Uber e mais',        gradientColors: [4293498165, 4288423452], iconCodePoint: 59375, route: '/rewards' },
+  { id: 'b4', title: 'Indique e ganhe\nR$ 50!',              subtitle: 'Por cada amigo que baixar o app',   gradientColors: [4279378368, 4279900114], iconCodePoint: 59375, route: '/referral' },
+  { id: 'b5', title: 'Cashback de 5% em\nrestaurantes!',     subtitle: 'Válido até 30/Jun',                 gradientColors: [4280391411, 4282339765], iconCodePoint: 60216, route: '/partners' },
+  { id: 'b6', title: 'Antecipe seu FGTS\ncom taxa zero!',    subtitle: 'Condições especiais',               gradientColors: [4278224220, 4280496794], iconCodePoint: 57685, route: '/partners' },
 ]
 
 // ─── Disputes ─────────────────────────────────────────────────────────────────
@@ -127,30 +129,37 @@ export const EXTERNAL_BENEFITS = [
 
 // ─── Rewards ─────────────────────────────────────────────────────────────────
 export const REWARDS_SUMMARY = {
-  totalPoints: 1250,
-  level: 2,
-  nextLevelPoints: 2000,
+  totalPoints: 2450,
+  level: 2,                // Prata
+  nextLevelPoints: 5000,   // Ouro
   availableRewards: [
-    { id: 'rw-001', name: 'Vale iFood R$30',    points: 300,  category: 'alimentacao',   description: 'Válido em pedidos acima de R$40',  iconName: 'fastfood' },
-    { id: 'rw-002', name: 'Vale Cinema',        points: 500,  category: 'cultura',       description: 'Ingresso para qualquer sessão 2D', iconName: 'movie' },
-    { id: 'rw-003', name: 'Cashback 2%',        points: 200,  category: 'cashback',      description: 'Cashback em compras no mês',       iconName: 'monetization_on' },
-    { id: 'rw-004', name: 'Gift Card Amazon',   points: 1000, category: 'compras',       description: 'R$50 em compras na Amazon',        iconName: 'shopping_bag' },
-    { id: 'rw-005', name: 'Aula de Yoga',       points: 150,  category: 'saude',         description: 'Aula avulsa em studio parceiro',   iconName: 'self_improvement' },
-    { id: 'rw-006', name: 'Uber R$20',          points: 250,  category: 'transporte',    description: 'Crédito em viagens Uber',          iconName: 'directions_car' },
-    { id: 'rw-007', name: 'Spotify 1 mês',      points: 400,  category: 'entretenimento',description: '1 mês Premium grátis',             iconName: 'music_note' },
-    { id: 'rw-008', name: 'Cashback 5%',        points: 800,  category: 'cashback',      description: 'Cashback premium no mês',         iconName: 'star' },
+    { id: 'rw-001', name: 'Vale iFood R$30',    points: 300,  category: 'alimentacao',    description: 'Válido em pedidos acima de R$40',        iconName: 'fastfood' },
+    { id: 'rw-002', name: 'Vale Cinema',         points: 500,  category: 'cultura',        description: 'Ingresso para qualquer sessão 2D',       iconName: 'movie' },
+    { id: 'rw-003', name: 'Cashback 2%',         points: 200,  category: 'cashback',       description: 'Cashback em compras no mês',             iconName: 'monetization_on' },
+    { id: 'rw-004', name: 'Gift Card Amazon',    points: 1000, category: 'compras',        description: 'R$50 em compras na Amazon',              iconName: 'shopping_bag' },
+    { id: 'rw-005', name: 'Aula de Yoga',        points: 150,  category: 'saude',          description: 'Aula avulsa em studio parceiro',         iconName: 'self_improvement' },
+    { id: 'rw-006', name: 'Uber R$20',           points: 250,  category: 'transporte',     description: 'Crédito em viagens Uber',                iconName: 'directions_car' },
+    { id: 'rw-007', name: 'Spotify 1 mês',       points: 400,  category: 'entretenimento', description: '1 mês Premium grátis',                   iconName: 'music_note' },
+    { id: 'rw-008', name: 'Cashback 5%',         points: 800,  category: 'cashback',       description: 'Cashback premium no mês',                iconName: 'star' },
+    { id: 'rw-009', name: 'Gift Card Renner',    points: 600,  category: 'compras',        description: 'R$30 em compras na Renner',              iconName: 'checkroom' },
+    { id: 'rw-010', name: 'Vale Farmácia R$25',  points: 350,  category: 'saude',          description: 'Desconto em farmácias parceiras',        iconName: 'local_pharmacy' },
   ],
   history: [
-    { id: 'rh-001', description: 'Compra no IKD Restaurante',     points: 50,   date: new Date(Date.now() - 2 * 86400000).toISOString(),   type: 'earned' },
-    { id: 'rh-002', description: 'Bônus de boas-vindas',          points: 200,  date: new Date(Date.now() - 10 * 86400000).toISOString(),  type: 'bonus' },
-    { id: 'rh-003', description: 'Resgate Vale Cinema',           points: -500, date: new Date(Date.now() - 15 * 86400000).toISOString(),  type: 'redeemed' },
-    { id: 'rh-004', description: 'Compra no Pão de Açúcar',       points: 80,   date: new Date(Date.now() - 20 * 86400000).toISOString(),  type: 'earned' },
-    { id: 'rh-005', description: 'Pagamento de boleto',           points: 30,   date: new Date(Date.now() - 25 * 86400000).toISOString(),  type: 'earned' },
-    { id: 'rh-006', description: 'Bônus indicação',               points: 100,  date: new Date(Date.now() - 30 * 86400000).toISOString(),  type: 'bonus' },
-    { id: 'rh-007', description: 'Resgate Uber R$20',            points: -250, date: new Date(Date.now() - 35 * 86400000).toISOString(),  type: 'redeemed' },
-    { id: 'rh-008', description: 'Compra no Subway',              points: 25,   date: new Date(Date.now() - 40 * 86400000).toISOString(),  type: 'earned' },
-    { id: 'rh-009', description: 'Bônus aniversário',             points: 500,  date: new Date(Date.now() - 60 * 86400000).toISOString(),  type: 'bonus' },
-    { id: 'rh-010', description: 'Expiração pontos inativos',     points: -100, date: new Date(Date.now() - 90 * 86400000).toISOString(),  type: 'expired' },
+    { id: 'rh-001', description: 'Compra no IKD Restaurante',       points: 50,   date: new Date(Date.now() - 1 * 86400000).toISOString(),   type: 'earned' },
+    { id: 'rh-002', description: 'Pagamento QR Code — Padaria Luce',points: 20,   date: new Date(Date.now() - 3 * 86400000).toISOString(),   type: 'earned' },
+    { id: 'rh-003', description: 'Bônus de boas-vindas',            points: 200,  date: new Date(Date.now() - 10 * 86400000).toISOString(),  type: 'bonus' },
+    { id: 'rh-004', description: 'Resgate Vale Cinema',             points: -500, date: new Date(Date.now() - 15 * 86400000).toISOString(),  type: 'redeemed' },
+    { id: 'rh-005', description: 'Compra no Pão de Açúcar',         points: 80,   date: new Date(Date.now() - 20 * 86400000).toISOString(),  type: 'earned' },
+    { id: 'rh-006', description: 'Pagamento de boleto — IPTU',      points: 30,   date: new Date(Date.now() - 25 * 86400000).toISOString(),  type: 'earned' },
+    { id: 'rh-007', description: 'Bônus indicação — Maria Santos',  points: 100,  date: new Date(Date.now() - 30 * 86400000).toISOString(),  type: 'bonus' },
+    { id: 'rh-008', description: 'Resgate Uber R$20',               points: -250, date: new Date(Date.now() - 35 * 86400000).toISOString(),  type: 'redeemed' },
+    { id: 'rh-009', description: 'Compra no Subway',                points: 25,   date: new Date(Date.now() - 40 * 86400000).toISOString(),  type: 'earned' },
+    { id: 'rh-010', description: 'Bônus aniversário empresa',       points: 500,  date: new Date(Date.now() - 60 * 86400000).toISOString(),  type: 'bonus' },
+    { id: 'rh-011', description: 'Compra na Drogaria Raia',         points: 65,   date: new Date(Date.now() - 65 * 86400000).toISOString(),  type: 'earned' },
+    { id: 'rh-012', description: 'Expiração pontos inativos',       points: -100, date: new Date(Date.now() - 90 * 86400000).toISOString(),  type: 'expired' },
+    { id: 'rh-013', description: 'Recarga celular Vivo',            points: 15,   date: new Date(Date.now() - 95 * 86400000).toISOString(),  type: 'earned' },
+    { id: 'rh-014', description: 'Bônus meta mensal atingida',      points: 300,  date: new Date(Date.now() - 100 * 86400000).toISOString(), type: 'bonus' },
+    { id: 'rh-015', description: 'Expiração pontos trimestre',      points: -85,  date: new Date(Date.now() - 120 * 86400000).toISOString(), type: 'expired' },
   ],
 }
 
@@ -197,20 +206,33 @@ export function getSecurityActivity() {
 
 // ─── FAQs ─────────────────────────────────────────────────────────────────────
 export const FAQS = [
-  { question: 'Como criar um cartão virtual?',              answer: 'Acesse a aba Cartões e toque em "Criar cartão virtual". O cartão ficará disponível imediatamente.',      category: 'Cartões' },
-  { question: 'Como bloquear meu cartão?',                  answer: 'Acesse a aba Cartões, selecione o cartão desejado e toque em "Bloquear cartão".',                       category: 'Cartões' },
-  { question: 'O que fazer se suspeitar de cartão clonado?',answer: 'Bloqueie o cartão imediatamente em Cartões > Bloquear e entre em contato com o suporte.',               category: 'Cartões' },
-  { question: 'Como consultar meu saldo?',                  answer: 'O saldo de cada carteira fica visível na tela inicial. Toque em uma carteira para ver detalhes.',        category: 'Saldos' },
-  { question: 'Por que meu saldo não atualizou?',           answer: 'O saldo é atualizado em tempo real. Puxe a tela para baixo para forçar a atualização.',                 category: 'Saldos' },
-  { question: 'Como fazer uma transferência PIX?',          answer: 'Acesse Carteiras, selecione a carteira desejada e toque em "PIX". Informe a chave PIX do destinatário.', category: 'Saldos' },
+  // Cartão (4)
+  { question: 'Como criar um cartão virtual?',              answer: 'Acesse a aba Cartões e toque em "Criar cartão virtual". O cartão ficará disponível imediatamente.',      category: 'Cartão' },
+  { question: 'Como bloquear meu cartão?',                  answer: 'Acesse a aba Cartões, selecione o cartão desejado e toque em "Bloquear cartão".',                       category: 'Cartão' },
+  { question: 'O que fazer se suspeitar de cartão clonado?',answer: 'Bloqueie o cartão imediatamente em Cartões > Bloquear e entre em contato com o suporte.',               category: 'Cartão' },
+  { question: 'Meu cartão físico não chegou, o que fazer?', answer: 'Verifique o status de entrega em Cartões > Rastreamento. Se o prazo expirou, solicite uma 2ª via.',     category: 'Cartão' },
+  // Conta (3)
   { question: 'Como alterar minha senha?',                  answer: 'Acesse Perfil > Segurança > Alterar Senha. Você precisará confirmar com seu PIN transacional.',          category: 'Conta' },
-  { question: 'Como ativar biometria?',                     answer: 'Acesse Perfil > Segurança > Biometria e siga as instruções para cadastrar sua digital ou face.',          category: 'Conta' },
-  { question: 'Como encontrar parceiros com desconto?',     answer: 'Acesse a aba Parceiros para ver todos os estabelecimentos que aceitam seu cartão Origami.',              category: 'Parceiros' },
-  { question: 'Quais estabelecimentos aceitam meu cartão?', answer: 'Restaurantes, farmácias, supermercados, academias, cinemas e muito mais. Veja na aba Parceiros.',        category: 'Parceiros' },
-  { question: 'Como exportar meu extrato?',                 answer: 'Acesse Carteiras > Extrato, escolha o período e o formato (PDF ou CSV) e toque em Exportar.',            category: 'Extrato' },
-  { question: 'Por quanto tempo fica disponível o extrato?', answer: 'O extrato fica disponível por 24 meses. Para colaboradores desligados, por 90 dias após o desligamento.', category: 'Extrato' },
-  { question: 'Como solicitar reembolso?',                  answer: 'Acesse Benefícios > Reembolsos, preencha o formulário e anexe o comprovante de pagamento.',             category: 'Conta' },
-  { question: 'Meu cartão físico não chegou, o que fazer?', answer: 'Verifique o status de entrega em Cartões > Rastreamento. Se o prazo expirou, solicite uma 2ª via.',     category: 'Cartões' },
+  { question: 'Como consultar meu saldo?',                  answer: 'O saldo de cada carteira fica visível na tela inicial. Toque em uma carteira para ver detalhes.',        category: 'Conta' },
+  { question: 'Por que meu saldo não atualizou?',           answer: 'O saldo é atualizado em tempo real. Puxe a tela para baixo para forçar a atualização.',                 category: 'Conta' },
+  // Benefícios (3)
+  { question: 'Como solicitar reembolso?',                  answer: 'Acesse Benefícios > Reembolsos, preencha o formulário e anexe o comprovante de pagamento.',              category: 'Benefícios' },
+  { question: 'Quais benefícios externos estão disponíveis?',answer: 'Acesse Benefícios > Externos para ver Gympass, Alura, Zenklub e outros parceiros inclusos no pacote.', category: 'Benefícios' },
+  { question: 'Como resgatar pontos de recompensa?',        answer: 'Acesse Recompensas, escolha o prêmio desejado e toque em "Resgatar". Os pontos são debitados na hora.',  category: 'Benefícios' },
+  // Pagamentos (3)
+  { question: 'Como fazer uma transferência PIX?',          answer: 'Acesse Carteiras, selecione a carteira desejada e toque em "PIX". Informe a chave PIX do destinatário.', category: 'Pagamentos' },
+  { question: 'Como pagar um boleto pelo app?',             answer: 'Acesse Carteiras > Pagar Boleto, escaneie o código de barras ou digite manualmente e confirme.',          category: 'Pagamentos' },
+  { question: 'Como exportar meu extrato?',                 answer: 'Acesse Carteiras > Extrato, escolha o período e o formato (PDF ou CSV) e toque em Exportar.',            category: 'Pagamentos' },
+  { question: 'Posso fazer recarga de celular pelo app?',   answer: 'Sim. Acesse Carteiras > Recarga, selecione a operadora e o valor desejado.',                             category: 'Pagamentos' },
+  // Segurança (4)
+  { question: 'Como ativar biometria?',                     answer: 'Acesse Perfil > Segurança > Biometria e siga as instruções para cadastrar sua digital ou face.',          category: 'Segurança' },
+  { question: 'O que é o PIN transacional?',                answer: 'O PIN é um código de 4 dígitos usado para confirmar transações sensíveis como PIX e pagamentos.',         category: 'Segurança' },
+  { question: 'Como ativar autenticação em 2 fatores?',     answer: 'Acesse Perfil > Segurança > 2FA e siga as instruções. Você receberá um código por SMS a cada login.',    category: 'Segurança' },
+  { question: 'Minha conta foi bloqueada, o que fazer?',    answer: 'Após 5 tentativas incorretas sua conta é bloqueada temporariamente. Aguarde 2h ou contate o RH.',         category: 'Segurança' },
+  // Extra
+  { question: 'Como encontrar parceiros com desconto?',     answer: 'Acesse a aba Parceiros para ver todos os estabelecimentos que aceitam seu cartão Origami.',              category: 'Benefícios' },
+  { question: 'Quais estabelecimentos aceitam meu cartão?', answer: 'Restaurantes, farmácias, supermercados, academias, cinemas e muito mais. Veja na aba Parceiros.',        category: 'Benefícios' },
+  { question: 'Por quanto tempo fica disponível o extrato?',answer: 'O extrato fica disponível por 24 meses. Para colaboradores desligados, por 90 dias após o desligamento.', category: 'Pagamentos' },
 ]
 
 // ─── Expenses ─────────────────────────────────────────────────────────────────

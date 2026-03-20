@@ -22,6 +22,9 @@ import {
   buildSeedReports,
   buildSeedAvailableVouchers,
   buildSeedMyVouchers,
+  buildSeedNextDeposits,
+  buildSeedCardDeliveries,
+  buildSeedKycResults,
 } from './seeds.js'
 
 import {
@@ -55,6 +58,10 @@ const state = {
   digitalWalletCards: [],
   externalBenefits: [],
   rewardsSummary: null,
+
+  nextDepositsByUser: {},  // { [userId]: [{ walletId, amount, scheduledDate, description }] }
+  cardDeliveries: {},      // { [cardId]: CardDelivery }
+  kycResultsByUser: {},    // { [userId]: KycResult }
 
   // Per-user ephemeral state
   favorites: {},           // { [userId]: Set<partnerId> }
@@ -112,6 +119,9 @@ export function reset() {
   state.digitalWalletCards = clone(SEED_DIGITAL_WALLET_CARDS)
   state.externalBenefits = clone(EXTERNAL_BENEFITS)
   state.rewardsSummary = clone(REWARDS_SUMMARY)
+  state.nextDepositsByUser = buildSeedNextDeposits()
+  state.cardDeliveries = buildSeedCardDeliveries()
+  state.kycResultsByUser = buildSeedKycResults()
 
   state.favorites = {}
   state.notifPrefs = {}
@@ -170,13 +180,15 @@ export function getCardById(userId, cardId) {
 export function getTransactions(userId) {
   const txs = state.transactionsByUser[String(userId)] ?? []
   return txs.map(tx => ({
-    ...tx,
+    // Defaults for receipt fields (overridden by spread if present in tx)
     direcao: tx.tipo === 'credito' ? 'credito' : 'debito',
     estabelecimento: tx.merchant ?? tx.descricao,
-    walletTipo: null,
+    walletTipo: tx.walletTipo ?? null,
     nsu: null, codigoAutorizacao: null, cnpjEstabelecimento: null,
     enderecoEstabelecimento: null, cartaoFinal: null, bandeira: null,
     mcc: null, mccDescricao: null, parcelas: null, valorParcela: null, nomePortador: null,
+    // Spread tx AFTER defaults so seed receipt data wins
+    ...tx,
   }))
 }
 
@@ -226,6 +238,9 @@ export function getNotifPrefs(userId) {
 }
 export function getSensitiveData() { return SENSITIVE_DATA }
 export function getScheduledDeposits() { return state.scheduledDeposits }
+export function getNextDeposits(userId) { return state.nextDepositsByUser[String(userId)] ?? [] }
+export function getCardDelivery(cardId) { return state.cardDeliveries[cardId] ?? null }
+export function getKycResult(userId) { return state.kycResultsByUser[String(userId)] ?? null }
 
 // Static data (never mutated)
 export function getBanners() { return BANNERS }

@@ -102,9 +102,13 @@ export function buildSeedWallets() {
 // ─── Cards by User (10+ cards across users) ─────────────────────────────────
 export const SEED_CARDS_BY_USER = {
   '1': [
-    { id: 'c1', tipo: 'fisico', status: 'ativo', bandeira: 'visa', ultimosDigitos: '4625', nomePortador: 'LUCAS O SILVA', validade: '12/28', carteirasVinculadas: ['Flexível ACT 2026','Refeição/Alimentação','Benefício Flexível'], contactless: true, pin: '5678' },
-    { id: 'c2', tipo: 'virtual', status: 'ativo', bandeira: 'mastercard', ultimosDigitos: '9501', nomePortador: 'LUCAS O SILVA', validade: '11/30', carteirasVinculadas: ['Transporte','Cultura'], contactless: false, pin: '9876' },
-    { id: 'c3', tipo: 'virtual', status: 'ativo', bandeira: 'elo', ultimosDigitos: '2210', nomePortador: 'LUCAS O SILVA', validade: '03/28', carteirasVinculadas: ['Saúde'], contactless: false, pin: '4321' },
+    { id: 'c1', tipo: 'fisico', status: 'ativo', bandeira: 'visa', ultimosDigitos: '4625', nomePortador: 'LUCAS O SILVA', validade: '12/28', carteirasVinculadas: ['Flexível ACT 2026','Refeição/Alimentação','Benefício Flexível'], contactless: true, pin: '5678', internationalMode: false },
+    { id: 'c2', tipo: 'virtual', status: 'ativo', bandeira: 'mastercard', ultimosDigitos: '9501', nomePortador: 'LUCAS O SILVA', validade: '11/30', carteirasVinculadas: ['Transporte','Cultura'], contactless: false, pin: null },
+    { id: 'c3', tipo: 'virtual', status: 'ativo', bandeira: 'elo', ultimosDigitos: '2210', nomePortador: 'LUCAS O SILVA', validade: '03/28', carteirasVinculadas: ['Saúde'], contactless: false, pin: null },
+    { id: 'c4', tipo: 'fisico', status: 'pendente', bandeira: 'visa', ultimosDigitos: '7744', nomePortador: 'LUCAS O SILVA', validade: '06/29', carteirasVinculadas: ['Educação'], contactless: true, pin: null, internationalMode: false },
+    { id: 'c5', tipo: 'fisico', status: 'bloqueado', bandeira: 'mastercard', ultimosDigitos: '3388', nomePortador: 'LUCAS O SILVA', validade: '09/28', carteirasVinculadas: ['Flexível ACT 2026','Transporte'], contactless: true, pin: '2468', internationalMode: false },
+    { id: 'c6', tipo: 'virtual', status: 'cancelado', bandeira: 'elo', ultimosDigitos: '5566', nomePortador: 'LUCAS O SILVA', validade: '01/27', carteirasVinculadas: ['Cultura'], contactless: false, pin: null },
+    { id: 'c7', tipo: 'fisico', status: 'ativo', bandeira: 'visa', ultimosDigitos: '9922', nomePortador: 'LUCAS O SILVA', validade: '04/29', carteirasVinculadas: ['Flexível ACT 2026','Benefício Flexível'], contactless: true, pin: '1357', internationalMode: true },
   ],
   '2': [
     { id: 'c1', tipo: 'fisico', status: 'ativo', bandeira: 'mastercard', ultimosDigitos: '7821', nomePortador: 'MARIA S FERREIRA', validade: '08/27', carteirasVinculadas: ['Refeição','Flexível','Saúde e Bem-estar'], contactless: true, pin: '1111' },
@@ -429,9 +433,38 @@ export function buildSeedNotifications() {
   }
 }
 
-// ─── Partners (10) ──────────────────────────────────────────────────────────
+// ─── Sessions by User ────────────────────────────────────────────────────────
+export function buildSeedSessions() {
+  return {
+    '1': [
+      { id: 'sess-1', deviceName: 'Samsung Galaxy A13', deviceType: 'Android', location: 'São Paulo, SP', lastActive: NOW(), isCurrent: true },
+      { id: 'sess-2', deviceName: 'Chrome - Windows', deviceType: 'Web', location: 'São Paulo, SP', lastActive: d(2), isCurrent: false },
+      { id: 'sess-3', deviceName: 'iPhone 14', deviceType: 'iOS', location: 'Rio de Janeiro, RJ', lastActive: dDays(3), isCurrent: false },
+    ],
+  }
+}
+
+// ─── Security Activity by User ──────────────────────────────────────────────
+export function buildSeedSecurityActivity() {
+  return {
+    '1': [
+      { id: 'sec-1', descricao: 'Login realizado com sucesso', dispositivo: 'Samsung Galaxy A13', data: NOW(), tipo: 'login' },
+      { id: 'sec-2', descricao: 'Senha alterada', dispositivo: 'Chrome - Windows', data: d(24), tipo: 'password_change' },
+      { id: 'sec-3', descricao: 'Biometria ativada', dispositivo: 'Samsung Galaxy A13', data: dDays(5), tipo: 'biometric' },
+      { id: 'sec-4', descricao: 'Sessão encerrada remotamente', dispositivo: 'iPhone 14', data: dDays(7), tipo: 'session_terminate' },
+      { id: 'sec-5', descricao: 'Tentativa de login com senha incorreta', dispositivo: 'Desconhecido', data: dDays(10), tipo: 'failed_login' },
+    ],
+  }
+}
+
+// ─── Partners (26) — at least 2 per category ────────────────────────────────
 export const SEED_PARTNERS = [
+  // restaurante (3)
   { id: 'p1', name: 'IKD Restaurante', category: 'restaurante', address: 'Av. Paulista, 1578 — Bela Vista, SP', distance: '0.2 km', rating: 4.5, acceptedBenefits: ['refeicao'], discount: '10% no almoço', isOpen: true, lat: -23.564, lng: -46.651, description: 'Restaurante japonês com buffet por quilo no almoço.', phone: '(11) 3253-1578', hours: 'Seg–Sex 11h–15h, 18h–22h | Sáb–Dom 12h–22h' },
+  { id: 'p9', name: 'iFood Restaurante Parceiro', category: 'restaurante', address: 'Av. Brigadeiro Luís Antônio, 500', distance: '1.5 km', rating: 4.3, acceptedBenefits: ['refeicao','flexivel'], discount: 'Frete grátis', isOpen: true, lat: -23.576, lng: -46.658, description: 'Culinária contemporânea brasileira.', phone: '(11) 3253-0500', hours: 'Seg–Sex 11h–22h | Sáb–Dom 12h–22h' },
+  { id: 'p14', name: 'Restaurante Madero', category: 'restaurante', address: 'R. Oscar Freire, 700 — Jardins, SP', distance: '1.8 km', rating: 4.6, acceptedBenefits: ['refeicao','flexivel'], discount: null, isOpen: false, lat: -23.563, lng: -46.669, description: 'Hambúrgueres artesanais e pratos autorais.', phone: '(11) 3062-0700', hours: 'Seg–Sex 12h–23h | Sáb–Dom 12h–00h' },
+
+  // farmacia (3)
   { id: 'p2', name: 'Drogaria Raia', category: 'farmacia', address: 'R. Augusta, 723 — Consolação, SP', distance: '0.5 km', rating: 4.2, acceptedBenefits: ['saude','flexivel'], discount: null, isOpen: true, lat: -23.561, lng: -46.657, description: 'Farmácia com manipulação e convênio médico.', phone: '(11) 3214-0723', hours: 'Todos os dias 07h–22h' },
   { id: 'p3', name: 'Pão de Açúcar', category: 'supermercado', address: 'Av. Paulista, 2064 — Jardim Paulista, SP', distance: '0.8 km', rating: 4.3, acceptedBenefits: ['alimentacao','flexivel'], discount: '5% em produtos selecionados', isOpen: true, lat: -23.558, lng: -46.662, description: 'Supermercado premium com hortifruti orgânico e padaria.', phone: '(11) 3064-2064', hours: 'Todos os dias 07h–23h' },
   { id: 'p4', name: 'Smart Fit', category: 'academia', address: 'Av. Paulista, 807 — Bela Vista, SP', distance: '0.4 km', rating: 4.1, acceptedBenefits: ['saude','flexivel'], discount: 'Matrícula grátis', isOpen: true, lat: -23.570, lng: -46.648, description: 'Academia com musculação, cardio e aulas coletivas.', phone: '(11) 4000-0807', hours: 'Seg–Sex 06h–23h | Sáb–Dom 08h–20h' },
@@ -552,6 +585,145 @@ export function buildSeedMyVouchers() {
     { id: 'vou-my-003', merchantName: 'Cinemark', description: 'Ingresso 2D qualquer sessão', faceValue: 35.00, salePrice: 25.00, category: 'entretenimento', logoUrl: null, expiresAt: dDays(5), status: 'expired', code: 'CINE-EXPIRED-001' },
     { id: 'vou-my-004', merchantName: 'Smart Fit', description: '1 mês grátis de academia', faceValue: 99.90, salePrice: 0.00, category: 'saude', logoUrl: null, expiresAt: dFuture(15), status: 'purchased', code: 'SMARTFIT-FREE-2026' },
   ]
+}
+
+// ─── Next Deposits by User ──────────────────────────────────────────────────
+export function buildSeedNextDeposits() {
+  return {
+    '1': [
+      { walletId: 'w1', amount: 500.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Flexível ACT 2026' },
+      { walletId: 'w3', amount: 600.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Refeição/Alimentação' },
+      { walletId: 'w4', amount: 400.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Transporte' },
+      { walletId: 'w5', amount: 200.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Cultura' },
+      { walletId: 'w6', amount: 500.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Saúde' },
+    ],
+    '2': [
+      { walletId: 'w1', amount: 600.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Refeição' },
+      { walletId: 'w2', amount: 400.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Flexível' },
+      { walletId: 'w3', amount: 300.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Saúde e Bem-estar' },
+    ],
+    '3': [
+      { walletId: 'w1', amount: 700.00, scheduledDate: dFuture(7).substring(0, 10), description: 'Crédito mensal — Alimentação' },
+      { walletId: 'w2', amount: 300.00, scheduledDate: dFuture(7).substring(0, 10), description: 'Crédito mensal — Transporte' },
+    ],
+    '7': [
+      { walletId: 'w1', amount: 400.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Alimentação Estágio' },
+      { walletId: 'w2', amount: 200.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Transporte Estágio' },
+    ],
+    '11': [
+      { walletId: 'w1', amount: 400.00, scheduledDate: dFuture(3).substring(0, 10), description: 'Crédito mensal — Flexível' },
+      { walletId: 'w2', amount: 500.00, scheduledDate: dFuture(3).substring(0, 10), description: 'Crédito mensal — Refeição' },
+      { walletId: 'w3', amount: 250.00, scheduledDate: dFuture(3).substring(0, 10), description: 'Crédito mensal — Transporte' },
+    ],
+    '12': [],
+  }
+}
+
+// ─── Card Deliveries ────────────────────────────────────────────────────────
+export function buildSeedCardDeliveries() {
+  return {
+    'c1': {
+      cardId: 'c1',
+      status: 'delivered',
+      carrier: 'Correios',
+      trackingCode: 'BR123456789BR',
+      estimatedDate: dDays(5).substring(0, 10),
+      deliveryAddress: 'Rua das Flores, 123 — São Paulo, SP',
+      events: [
+        { description: 'Objeto postado', date: dDays(10), location: 'Barueri, SP' },
+        { description: 'Em trânsito para a cidade de destino', date: dDays(8), location: 'São Paulo, SP' },
+        { description: 'Objeto saiu para entrega ao destinatário', date: dDays(6), location: 'São Paulo, SP' },
+        { description: 'Objeto entregue ao destinatário', date: dDays(5), location: 'São Paulo, SP' },
+      ],
+    },
+    'c4': {
+      cardId: 'c4',
+      status: 'in_transit',
+      carrier: 'Correios',
+      trackingCode: 'BR987654321BR',
+      estimatedDate: dFuture(3).substring(0, 10),
+      deliveryAddress: 'Rua das Flores, 123 — São Paulo, SP',
+      events: [
+        { description: 'Objeto postado', date: dDays(2), location: 'Barueri, SP' },
+        { description: 'Em trânsito para a cidade de destino', date: dDays(1), location: 'Campinas, SP' },
+      ],
+    },
+    'c5': {
+      cardId: 'c5',
+      status: 'processing',
+      carrier: 'Correios',
+      trackingCode: '',
+      estimatedDate: dFuture(10).substring(0, 10),
+      deliveryAddress: 'Rua das Flores, 123 — São Paulo, SP',
+      events: [],
+    },
+  }
+}
+
+// ─── KYC Results by User ────────────────────────────────────────────────────
+export function buildSeedKycResults() {
+  return {
+    '1': {
+      id: 'kyc-001',
+      status: 'approved',
+      cpfValid: true,
+      documentValid: true,
+      certifaceScore: 0.95,
+      rejectionReason: null,
+      submittedAt: dDays(30),
+      reviewedAt: dDays(29),
+    },
+    '4': {
+      id: 'kyc-004',
+      status: 'notStarted',
+      cpfValid: null,
+      documentValid: null,
+      certifaceScore: null,
+      rejectionReason: null,
+      submittedAt: null,
+      reviewedAt: null,
+    },
+    '7': {
+      id: 'kyc-007',
+      status: 'inProgress',
+      cpfValid: true,
+      documentValid: false,
+      certifaceScore: null,
+      rejectionReason: null,
+      submittedAt: dDays(3),
+      reviewedAt: null,
+    },
+    '9': {
+      id: 'kyc-009',
+      status: 'rejected',
+      cpfValid: true,
+      documentValid: false,
+      certifaceScore: 0.42,
+      rejectionReason: 'Documento ilegível',
+      submittedAt: dDays(14),
+      reviewedAt: dDays(12),
+    },
+    '10': {
+      id: 'kyc-010',
+      status: 'notStarted',
+      cpfValid: null,
+      documentValid: null,
+      certifaceScore: null,
+      rejectionReason: null,
+      submittedAt: null,
+      reviewedAt: null,
+    },
+    '11': {
+      id: 'kyc-011',
+      status: 'underReview',
+      cpfValid: true,
+      documentValid: true,
+      certifaceScore: 0.82,
+      rejectionReason: null,
+      submittedAt: dDays(5),
+      reviewedAt: null,
+    },
+  }
 }
 
 // ─── Geofence Zones (5) ─────────────────────────────────────────────────────

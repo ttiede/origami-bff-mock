@@ -12,7 +12,8 @@ import {
   getReports, getAvailableVouchers, getMyVouchers,
   getGeofenceZones, getDigitalWalletCards,
   getExternalBenefits, getRewardsSummary,
-  getSensitiveData, getScheduledDeposits,
+  getSensitiveData, getScheduledDeposits, getNextDeposits,
+  getCardDelivery, getKycResult,
   getBanners, getFaqs,
   getStaticSessionsList, getSecurityActivityList,
   // Mutators
@@ -126,6 +127,11 @@ export const resolvers = {
     }),
 
     nextDeposits: (_, { walletId } = {}, context) => {
+      const deposits = getNextDeposits(uid(context))
+      if (deposits.length > 0) {
+        return walletId ? deposits.filter(d => d.walletId === walletId) : deposits
+      }
+      // Fallback for users without seed deposits
       const wallets = getWallets(uid(context))
       const filtered = walletId ? wallets.filter(w => w.id === walletId) : wallets.slice(0, 2)
       return filtered.map((w, i) => ({
@@ -159,19 +165,24 @@ export const resolvers = {
       return getCards(uid(context)).map(({ pin, ...c }) => c)
     },
 
-    cardDelivery: (_, { id: cardId }) => ({
-      cardId,
-      status: 'inTransit',
-      carrier: 'Correios',
-      trackingCode: `BR${Math.abs(cardId.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % 900000000 + 100000000)}BR`,
-      estimatedDate: new Date(Date.now() + 3 * 86400000).toISOString().substring(0, 10),
-      deliveryAddress: 'Rua das Flores, 123 — São Paulo, SP',
-      events: [
-        { description: 'Objeto postado',                        date: new Date(Date.now() - 2 * 86400000).toISOString(), location: 'Barueri, SP'   },
-        { description: 'Em trânsito para a cidade de destino',  date: new Date(Date.now() - 1 * 86400000).toISOString(), location: 'São Paulo, SP' },
-        { description: 'Objeto em processo de triagem',         date: new Date(Date.now() - 6 * 3600000).toISOString(),  location: 'São Paulo, SP' },
-      ],
-    }),
+    cardDelivery: (_, { id: cardId }) => {
+      const delivery = getCardDelivery(cardId)
+      if (delivery) return delivery
+      // Fallback for cards without seed delivery data
+      return {
+        cardId,
+        status: 'inTransit',
+        carrier: 'Correios',
+        trackingCode: `BR${Math.abs(cardId.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % 900000000 + 100000000)}BR`,
+        estimatedDate: new Date(Date.now() + 3 * 86400000).toISOString().substring(0, 10),
+        deliveryAddress: 'Rua das Flores, 123 — São Paulo, SP',
+        events: [
+          { description: 'Objeto postado',                        date: new Date(Date.now() - 2 * 86400000).toISOString(), location: 'Barueri, SP'   },
+          { description: 'Em trânsito para a cidade de destino',  date: new Date(Date.now() - 1 * 86400000).toISOString(), location: 'São Paulo, SP' },
+          { description: 'Objeto em processo de triagem',         date: new Date(Date.now() - 6 * 3600000).toISOString(),  location: 'São Paulo, SP' },
+        ],
+      }
+    },
 
     revealCard: (_, { id: cardId }) => {
       const data = getSensitiveData()[cardId]
@@ -206,16 +217,22 @@ export const resolvers = {
     },
 
     // ── KYC ───────────────────────────────────────────────────────
-    kycStatus: () => ({
-      id: 'kyc-001',
-      status: 'aprovada',
-      cpfValid: true,
-      documentValid: true,
-      certifaceScore: 0.98,
-      rejectionReason: null,
-      submittedAt: new Date(Date.now() - 7 * 86400000).toISOString(),
-      reviewedAt: new Date(Date.now() - 6 * 86400000).toISOString(),
-    }),
+    kycStatus: (_, __, context) => {
+      const userId = uid(context)
+      const result = getKycResult(userId)
+      if (result) return result
+      // Fallback for users without seed KYC data
+      return {
+        id: 'kyc-default',
+        status: 'approved',
+        cpfValid: true,
+        documentValid: true,
+        certifaceScore: 0.98,
+        rejectionReason: null,
+        submittedAt: new Date(Date.now() - 7 * 86400000).toISOString(),
+        reviewedAt: new Date(Date.now() - 6 * 86400000).toISOString(),
+      }
+    },
 
     // ── Approvals ─────────────────────────────────────────────────
     approvals: (_, { status } = {}) => {
@@ -506,7 +523,17 @@ export const resolvers = {
       return { ...safe, status: 'ativo' }
     },
 
-    validateCardPin: (_, { id, pin }) => ok(),
+    validateCardPin: (_, { id, pin }, context) => {
+      const userId = uid(context)
+      const storedPin = getCardPin(userId, id)
+      if (storedPin === null) {
+        return { success: false, message: 'Este cartão não possui PIN definido' }
+      }
+      if (storedPin !== pin) {
+        return { success: false, message: 'PIN incorreto' }
+      }
+      return ok()
+    },
 
     changeCardPin: (_, { id, newPin }, context) => {
       if (['0000', '1234', '4321'].includes(newPin)) {

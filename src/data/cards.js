@@ -56,7 +56,10 @@ export const SENSITIVE_DATA = {
   'c1': { numeroCompleto: '4539 1234 5678 4625', cvv: '412' },
   'c2': { numeroCompleto: '5412 8765 4321 7891', cvv: '293' },
   'c3': { numeroCompleto: '6062 9999 1111 2233', cvv: '847' },
-  'c4': { numeroCompleto: '4716 0000 5555 2001', cvv: '531' },
+  'c4': { numeroCompleto: '4716 0000 5555 7744', cvv: '531' },
+  'c5': { numeroCompleto: '5234 6789 0123 3388', cvv: '674' },
+  'c6': { numeroCompleto: '6504 3210 9876 5566', cvv: '918' },
+  'c7': { numeroCompleto: '4929 5555 7777 9922', cvv: '305' },
 }
 
 export function getCards(userId) {
