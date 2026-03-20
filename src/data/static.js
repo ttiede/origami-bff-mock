@@ -37,6 +37,26 @@ export const DISPUTES = [
       { date: new Date(Date.now() - 10 * 86400000).toISOString(), description: 'Contestação negada — transação válida', status: 'negada' },
     ],
   },
+  {
+    id: 'disp-004', transactionId: 'tx007', description: 'Produto não recebido',
+    amount: 89.90, merchantName: 'Amazon', status: 'em_analise',
+    date: new Date(Date.now() - 5 * 86400000).toISOString(),
+    events: [
+      { date: new Date(Date.now() - 5 * 86400000).toISOString(), description: 'Contestação aberta', status: 'aberta' },
+      { date: new Date(Date.now() - 3 * 86400000).toISOString(), description: 'Aguardando documentos do estabelecimento', status: 'em_analise' },
+    ],
+  },
+  {
+    id: 'disp-005', transactionId: 'tx009', description: 'Cobrança após cancelamento de plano',
+    amount: 99.90, merchantName: 'Smart Fit', status: 'resolvida',
+    date: new Date(Date.now() - 20 * 86400000).toISOString(),
+    events: [
+      { date: new Date(Date.now() - 20 * 86400000).toISOString(), description: 'Contestação aberta', status: 'aberta' },
+      { date: new Date(Date.now() - 18 * 86400000).toISOString(), description: 'Em análise', status: 'em_analise' },
+      { date: new Date(Date.now() - 16 * 86400000).toISOString(), description: 'Documentos analisados — crédito provisório R$ 99,90', status: 'em_analise' },
+      { date: new Date(Date.now() - 15 * 86400000).toISOString(), description: 'Estorno aprovado — R$ 99,90 creditado definitivamente', status: 'resolvida' },
+    ],
+  },
 ]
 
 // ─── Reimbursements ───────────────────────────────────────────────────────────
@@ -46,13 +66,15 @@ export const REIMBURSEMENTS = [
   { id: 'reimb-003', category: 'Alimentação', amount: 42.50,  date: new Date(Date.now() - 15 * 86400000).toISOString(), description: 'Kit lanche reunião remota',       status: 'aprovado',   receiptUrl: 'https://mock.origami.com.br/receipts/reimb-003.pdf', resolvedAt: new Date(Date.now() - 13 * 86400000).toISOString() },
   { id: 'reimb-004', category: 'Educação',    amount: 120.00, date: new Date(Date.now() - 20 * 86400000).toISOString(), description: 'Livro técnico — Clean Code',     status: 'pago',       receiptUrl: 'https://mock.origami.com.br/receipts/reimb-004.pdf', resolvedAt: new Date(Date.now() - 18 * 86400000).toISOString() },
   { id: 'reimb-005', category: 'Saúde',       amount: 75.00,  date: new Date(Date.now() - 30 * 86400000).toISOString(), description: 'Óculos de grau',                 status: 'rejeitado',  receiptUrl: null,                                                                       resolvedAt: new Date(Date.now() - 28 * 86400000).toISOString() },
+  { id: 'reimb-006', category: 'Transporte', amount: 156.00, date: new Date(Date.now() - 5 * 86400000).toISOString(),  description: 'Passagem aérea SP-RJ reunião cliente', status: 'aprovado', receiptUrl: 'https://mock.origami.com.br/receipts/reimb-006.pdf', resolvedAt: new Date(Date.now() - 3 * 86400000).toISOString() },
+  { id: 'reimb-007', category: 'Outros',     amount: 89.00,  date: new Date(Date.now() - 12 * 86400000).toISOString(), description: 'Material de apresentação para evento', status: 'aguardando', receiptUrl: 'https://mock.origami.com.br/receipts/reimb-007.pdf', resolvedAt: null },
 ]
 
 // ─── Balance Requests ─────────────────────────────────────────────────────────
 export const BALANCE_REQUESTS = [
   { id: 'br-001', walletId: 'w3', amount: 500.00, justificativa: 'Início de mês — saldo insuficiente',   status: 'aguardando', createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), updatedAt: null,                                                    approvedBy: null,       rejectionReason: null },
   { id: 'br-002', walletId: 'w6', amount: 200.00, justificativa: 'Procedimento cirúrgico emergencial',  status: 'aprovado',   createdAt: new Date(Date.now() - 5 * 86400000).toISOString(), updatedAt: new Date(Date.now() - 4 * 86400000).toISOString(), approvedBy: 'Gerente RH', rejectionReason: null },
-  { id: 'br-003', walletId: 'w4', amount: 100.00, justificativa: 'Semana de viagens a trabalho SP→RJ', status: 'rejeitado',  createdAt: new Date(Date.now() - 10 * 86400000).toISOString(), updatedAt: new Date(Date.now() - 9 * 86400000).toISOString(), approvedBy: null, rejectionReason: 'Saldo dentro do limite mensal' },
+  { id: 'br-003', walletId: 'w4', amount: 100.00, justificativa: 'Semana de viagens a trabalho SP→RJ', status: 'rejeitado',  createdAt: new Date(Date.now() - 10 * 86400000).toISOString(), updatedAt: new Date(Date.now() - 9 * 86400000).toISOString(), approvedBy: 'Diretor Financeiro', rejectionReason: 'Saldo dentro do limite mensal — não se aplica política de exceção' },
 ]
 
 // ─── Approvals ────────────────────────────────────────────────────────────────
@@ -125,6 +147,10 @@ export const REWARDS_SUMMARY = {
     { id: 'rh-004', description: 'Compra no Pão de Açúcar',       points: 80,   date: new Date(Date.now() - 20 * 86400000).toISOString(),  type: 'earned' },
     { id: 'rh-005', description: 'Pagamento de boleto',           points: 30,   date: new Date(Date.now() - 25 * 86400000).toISOString(),  type: 'earned' },
     { id: 'rh-006', description: 'Bônus indicação',               points: 100,  date: new Date(Date.now() - 30 * 86400000).toISOString(),  type: 'bonus' },
+    { id: 'rh-007', description: 'Resgate Uber R$20',            points: -250, date: new Date(Date.now() - 35 * 86400000).toISOString(),  type: 'redeemed' },
+    { id: 'rh-008', description: 'Compra no Subway',              points: 25,   date: new Date(Date.now() - 40 * 86400000).toISOString(),  type: 'earned' },
+    { id: 'rh-009', description: 'Bônus aniversário',             points: 500,  date: new Date(Date.now() - 60 * 86400000).toISOString(),  type: 'bonus' },
+    { id: 'rh-010', description: 'Expiração pontos inativos',     points: -100, date: new Date(Date.now() - 90 * 86400000).toISOString(),  type: 'expired' },
   ],
 }
 
@@ -193,6 +219,11 @@ export const EXPENSES = [
   { id: 'exp-002', description: 'Uber reunião matriz',  amount: 32.50, date: new Date(Date.now() - 3 * 86400000).toISOString(),  category: 'transporte', receiptUrl: null, lat: null,    lng: null,    merchant: 'Uber' },
   { id: 'exp-003', description: 'Material escritório',  amount: 45.00, date: new Date(Date.now() - 5 * 86400000).toISOString(),  category: 'outros',     receiptUrl: 'https://mock.origami.com.br/receipts/exp-003.pdf', lat: null, lng: null, merchant: 'Kalunga' },
   { id: 'exp-004', description: 'Jantar equipe sprint', amount: 280.00,date: new Date(Date.now() - 7 * 86400000).toISOString(),  category: 'refeicao',   receiptUrl: null, lat: -23.575, lng: -46.668, merchant: 'Restaurante Madero' },
+  { id: 'exp-005', description: 'Consulta oftalmologista', amount: 250.00, date: new Date(Date.now() - 4 * 86400000).toISOString(), category: 'saude', receiptUrl: 'https://mock.origami.com.br/receipts/exp-005.pdf', lat: -23.568, lng: -46.650, merchant: 'Clínica Einstein' },
+  { id: 'exp-006', description: 'Curso Figma avançado', amount: 149.90, date: new Date(Date.now() - 6 * 86400000).toISOString(), category: 'educacao', receiptUrl: 'https://mock.origami.com.br/receipts/exp-006.pdf', lat: null, lng: null, merchant: 'Alura' },
+  { id: 'exp-007', description: 'Cadeira ergonômica', amount: 850.00, date: new Date(Date.now() - 10 * 86400000).toISOString(), category: 'homeoffice', receiptUrl: 'https://mock.origami.com.br/receipts/exp-007.pdf', lat: -23.564, lng: -46.651, merchant: 'Kalunga' },
+  { id: 'exp-008', description: 'Supermercado compras semana', amount: 312.40, date: new Date(Date.now() - 1 * 86400000).toISOString(), category: 'alimentacao', receiptUrl: 'https://mock.origami.com.br/receipts/exp-008.pdf', lat: -23.558, lng: -46.662, merchant: 'Pão de Açúcar' },
+  { id: 'exp-009', description: 'Uber ida e volta reunião', amount: 47.20, date: new Date(Date.now() - 3 * 86400000).toISOString(), category: 'transporte', receiptUrl: null, lat: -23.570, lng: -46.648, merchant: 'Uber' },
 ]
 
 // ─── Advances ─────────────────────────────────────────────────────────────────
@@ -206,7 +237,7 @@ export const ADVANCES = [
 export const REPORTS = [
   { id: 'rep-001', title: 'Viagem SP-RJ Março',          period: '2026-03', totalAmount: 1122.40, expenseCount: 3, status: 'aprovado',   createdAt: new Date(Date.now() - 10 * 86400000).toISOString(), submittedAt: new Date(Date.now() - 9 * 86400000).toISOString(),  expenseIds: ['exp-001','exp-002','exp-003'] },
   { id: 'rep-002', title: 'Sprint Review Fevereiro',      period: '2026-02', totalAmount: 325.30,  expenseCount: 2, status: 'reprovado',  createdAt: new Date(Date.now() - 20 * 86400000).toISOString(), submittedAt: new Date(Date.now() - 19 * 86400000).toISOString(), expenseIds: ['exp-004'] },
-  { id: 'rep-003', title: 'Material Home Office Jan',     period: '2026-01', totalAmount: 45.00,   expenseCount: 1, status: 'rascunho',   createdAt: new Date(Date.now() - 2 * 86400000).toISOString(),  submittedAt: null,                                               expenseIds: [] },
+  { id: 'rep-003', title: 'Material Home Office Jan',     period: '2026-01', totalAmount: 895.00,  expenseCount: 2, status: 'rascunho',   createdAt: new Date(Date.now() - 2 * 86400000).toISOString(),  submittedAt: null,                                               expenseIds: ['exp-003','exp-007'] },
 ]
 
 // ─── Vouchers ─────────────────────────────────────────────────────────────────
@@ -220,6 +251,9 @@ export const AVAILABLE_VOUCHERS = [
 
 export const MY_VOUCHERS = [
   { id: 'vou-my-001', merchantName: 'Rappi',    description: '15% OFF no primeiro pedido',    faceValue: 40.00, salePrice: 0.00, category: 'alimentacao',    logoUrl: null, expiresAt: new Date(Date.now() + 5 * 86400000).toISOString(), status: 'purchased', code: 'RAPPI15MOCK' },
+  { id: 'vou-my-002', merchantName: 'iFood',    description: 'R$ 30 em pedidos acima de R$ 50', faceValue: 30.00, salePrice: 22.00, category: 'alimentacao', logoUrl: null, expiresAt: new Date(Date.now() + 20 * 86400000).toISOString(), status: 'purchased', code: 'IFOOD30-XK9M2' },
+  { id: 'vou-my-003', merchantName: 'Cinemark', description: 'Ingresso 2D qualquer sessão',    faceValue: 35.00, salePrice: 25.00, category: 'entretenimento', logoUrl: null, expiresAt: new Date(Date.now() - 5 * 86400000).toISOString(), status: 'expired', code: 'CINE-EXPIRED-001' },
+  { id: 'vou-my-004', merchantName: 'Smart Fit', description: '1 mês grátis de academia',     faceValue: 99.90, salePrice: 0.00, category: 'saude',          logoUrl: null, expiresAt: new Date(Date.now() + 15 * 86400000).toISOString(), status: 'purchased', code: 'SMARTFIT-FREE-2026' },
 ]
 
 // ─── Geofence Zones ───────────────────────────────────────────────────────────
@@ -229,6 +263,8 @@ export const GEOFENCE_ZONES = [
   { id: 'gz-003', name: 'Mercado Livre Hub',        description: 'Hub de parceiros ML',               latitude: -23.5489, longitude: -46.6388, radiusMeters: 200, isActive: true,  partnerId: null, type: 'partner' },
   { id: 'gz-004', name: 'Aeroporto Congonhas',      description: 'Check-in automático viagens',       latitude: -23.6271, longitude: -46.6559, radiusMeters: 500, isActive: false, partnerId: null, type: 'airport' },
   { id: 'gz-005', name: 'Shopping Ibirapuera',      description: 'Parceiros no shopping',             latitude: -23.5897, longitude: -46.6612, radiusMeters: 250, isActive: true,  partnerId: null, type: 'mall'    },
+  { id: 'gz-006', name: 'Zona Restrita — CPD',     description: 'Área restrita do centro de processamento de dados', latitude: -23.5550, longitude: -46.6400, radiusMeters: 50, isActive: true, partnerId: null, type: 'restricted' },
+  { id: 'gz-007', name: 'Estação Consolação',      description: 'Zona de trânsito — metrô Consolação', latitude: -23.5567, longitude: -46.6604, radiusMeters: 150, isActive: true, partnerId: null, type: 'transit' },
 ]
 
 // ─── Digital Wallet Cards ─────────────────────────────────────────────────────

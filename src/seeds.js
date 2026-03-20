@@ -17,7 +17,7 @@ export const SEED_USERS = [
   { id: '6', nome: 'Roberto Almeida', cpf: '76127261066', email: 'roberto.almeida@comercioxyz.com.br', telefone: '(31) 94321-0987', empresa: 'Comércio XYZ Ltda', departamento: 'Logística', cargo: 'Gerente de Logística', senha: 'Origami6!', primeiroAcesso: false, bloqueioDefinitivo: true, tentativasFalhas: 0 },
   { id: '7', nome: 'Fernanda Rocha Barbosa', cpf: '66392332154', email: 'fernanda.barbosa@startupnovaera.com.br', telefone: '(11) 93210-9876', empresa: 'Startup Nova Era', departamento: 'Desenvolvimento', cargo: 'Estagiária de Desenvolvimento', senha: 'Origami7!', primeiroAcesso: false, bloqueioDefinitivo: false, tentativasFalhas: 0 },
   { id: '8', nome: 'Diego Nascimento Santos', cpf: '46881973659', email: 'diego.santos@megacorp.com.br', telefone: '(11) 92109-8765', empresa: 'MegaCorp International', departamento: 'Diretoria Executiva', cargo: 'Diretor de Operações', senha: 'Origami8!', primeiroAcesso: false, bloqueioDefinitivo: false, tentativasFalhas: 0 },
-  { id: '9', nome: 'Patrícia Vieira Duarte', cpf: '99356327254', email: 'patricia.duarte@consultoriadelta.com.br', telefone: '(21) 91098-7654', empresa: 'Consultoria Delta', departamento: 'Jurídico', cargo: 'Advogada Sênior', senha: 'Origami9!', primeiroAcesso: false, bloqueioDefinitivo: false, tentativasFalhas: 4 },
+  { id: '9', nome: 'Patrícia Vieira Duarte', cpf: '99356327254', email: 'patricia.duarte@consultoriadelta.com.br', telefone: '(21) 91098-7654', empresa: 'Consultoria Delta', departamento: 'Jurídico', cargo: 'Advogada Sênior', senha: 'Origami9!', primeiroAcesso: false, bloqueioDefinitivo: false, tentativasFalhas: 4, bloqueioAte: new Date(Date.now() + 2 * 3600000).toISOString() },
   { id: '10', nome: 'Thiago Martins Ribeiro', cpf: '95181756085', email: 'thiago.ribeiro@remotetech.com.br', telefone: '(48) 90987-6543', empresa: 'RemoteTech LTDA', departamento: 'Infraestrutura', cargo: 'Engenheiro DevOps', senha: null, primeiroAcesso: true, bloqueioDefinitivo: false, tentativasFalhas: 0 },
   { id: '11', nome: 'Juliana Campos Neto', cpf: '48063581776', email: 'juliana.neto@varejoexpress.com.br', telefone: '(19) 98765-1234', empresa: 'Varejo Express', departamento: 'Vendas', cargo: 'Supervisora de Vendas', senha: 'Origami11!', primeiroAcesso: false, bloqueioDefinitivo: false, tentativasFalhas: 1 },
   { id: '12', nome: 'Rafael Souza Pereira', cpf: '83970523214', email: 'rafael.pereira@comercioxyz.com.br', telefone: '(31) 97654-0987', empresa: 'Comércio XYZ Ltda', departamento: 'Comercial', cargo: 'Ex-Vendedor (Desligado)', senha: 'Origami12!', primeiroAcesso: false, bloqueioDefinitivo: true, tentativasFalhas: 0 },
@@ -34,6 +34,8 @@ export function buildSeedWallets() {
       { id: 'w4', nome: 'Transporte', tipo: 'transporte', saldo: 280.00, limiteDisponivel: 400.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Carteira para transporte público e mobilidade urbana.', gastoSugeridoPorDia: 15.00, regrasDeUso: ['Ônibus','Metrô','Uber','99','Combustível'] },
       { id: 'w5', nome: 'Cultura', tipo: 'cultura', saldo: 150.00, limiteDisponivel: 200.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Benefício cultural para livros, cinema, teatro e eventos.', gastoSugeridoPorDia: 5.00, regrasDeUso: ['Livrarias','Cinema','Teatro','Shows','Streaming'] },
       { id: 'w6', nome: 'Saúde', tipo: 'saude', saldo: 430.75, limiteDisponivel: 500.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Benefício para cuidados com saúde e bem-estar.', gastoSugeridoPorDia: 14.00, regrasDeUso: ['Farmácias','Consultas','Exames','Academia'] },
+      { id: 'w7', nome: 'Educação', tipo: 'educacao', saldo: 0.00, limiteDisponivel: 300.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Carteira de educação zerada — saldo insuficiente para transações.', gastoSugeridoPorDia: 0.00, regrasDeUso: ['Cursos','Livros','Certificações'] },
+      { id: 'w8', nome: 'PIX Limite', tipo: 'flexivel', saldo: 5000.00, limiteDisponivel: 5000.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Carteira no limite máximo PIX diário para testes de limite.', gastoSugeridoPorDia: 0.00, regrasDeUso: ['PIX','Transferências'] },
     ],
     '2': [
       { id: 'w1', nome: 'Refeição', tipo: 'refeicao', saldo: 380.00, limiteDisponivel: 600.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Carteira de refeição para uso em restaurantes e lanchonetes.', gastoSugeridoPorDia: 25.00, regrasDeUso: ['Restaurantes','Lanchonetes','Padarias','Cafeterias'] },
@@ -195,6 +197,28 @@ export function buildSeedTransactions() {
       { id: 'tx038', descricao: 'Crédito Refeição/Alimentação', valor: 600.00, tipo: 'credito', categoria: 'Crédito', data: d(696), status: 'aprovada', walletId: 'w3', walletNome: 'Refeição/Alimentação', merchant: 'Origami' },
       { id: 'tx039', descricao: 'Padaria Luce', valor: -12.50, tipo: 'debito', categoria: 'Refeição', data: d(504), status: 'aprovada', walletId: 'w3', walletNome: 'Refeição/Alimentação', merchant: 'Padaria Luce' },
       { id: 'tx040', descricao: 'Shell — Combustível', valor: -195.00, tipo: 'debito', categoria: 'Transporte', data: d(528), status: 'aprovada', walletId: 'w4', walletNome: 'Transporte', merchant: 'Posto Shell' },
+      // Transactions with ALL statuses
+      { id: 'tx041', descricao: 'Compra pendente — Magazine Luiza', valor: -349.90, tipo: 'debito', categoria: 'Flexível', data: d(1), status: 'pendente', walletId: 'w1', walletNome: 'Flexível ACT 2026', merchant: 'Magazine Luiza' },
+      { id: 'tx042', descricao: 'Compra cancelada — Americanas', valor: -129.90, tipo: 'debito', categoria: 'Flexível', data: d(72), status: 'cancelada', walletId: 'w1', walletNome: 'Flexível ACT 2026', merchant: 'Americanas' },
+      { id: 'tx043', descricao: 'Estorno — Drogasil cobrança duplicada', valor: 64.50, tipo: 'credito', categoria: 'Estorno', data: d(48), status: 'estornada', walletId: 'w6', walletNome: 'Saúde', merchant: 'Drogasil' },
+      // Transaction with full receipt data (NSU, auth code, CNPJ, etc.)
+      { id: 'tx044', descricao: 'Restaurante Fasano — almoço executivo', valor: -320.00, tipo: 'debito', categoria: 'Refeição', data: d(6), status: 'aprovada', walletId: 'w3', walletNome: 'Refeição/Alimentação', merchant: 'Fasano', direcao: 'debito', nsu: '001234567890', codigoAutorizacao: 'AUTH-98765', cnpjEstabelecimento: '12.345.678/0001-90', enderecoEstabelecimento: 'Rua Haddock Lobo, 1738 — Jardim Paulista, SP', cartaoFinal: '4625', bandeira: 'visa', mcc: '5812', mccDescricao: 'Restaurantes', parcelas: 1, valorParcela: 320.00, nomePortador: 'LUCAS O SILVA' },
+      // Multi-month transactions (older months for month navigation)
+      { id: 'tx045', descricao: 'Crédito Mensal Fev', valor: 600.00, tipo: 'credito', categoria: 'Crédito', data: dDays(45), status: 'aprovada', walletId: 'w3', walletNome: 'Refeição/Alimentação', merchant: 'Origami' },
+      { id: 'tx046', descricao: 'Compra Fevereiro — Carrefour', valor: -234.50, tipo: 'debito', categoria: 'Flexível', data: dDays(50), status: 'aprovada', walletId: 'w1', walletNome: 'Flexível ACT 2026', merchant: 'Carrefour' },
+      { id: 'tx047', descricao: 'Crédito Mensal Jan', valor: 600.00, tipo: 'credito', categoria: 'Crédito', data: dDays(75), status: 'aprovada', walletId: 'w3', walletNome: 'Refeição/Alimentação', merchant: 'Origami' },
+      { id: 'tx048', descricao: 'Compra Janeiro — Extra', valor: -178.30, tipo: 'debito', categoria: 'Flexível', data: dDays(80), status: 'aprovada', walletId: 'w1', walletNome: 'Flexível ACT 2026', merchant: 'Extra' },
+      { id: 'tx049', descricao: 'Crédito Mensal Dez', valor: 600.00, tipo: 'credito', categoria: 'Crédito', data: dDays(105), status: 'aprovada', walletId: 'w3', walletNome: 'Refeição/Alimentação', merchant: 'Origami' },
+      { id: 'tx050', descricao: 'Compra Dezembro — Natalina', valor: -456.00, tipo: 'debito', categoria: 'Flexível', data: dDays(110), status: 'aprovada', walletId: 'w1', walletNome: 'Flexível ACT 2026', merchant: 'Natalina' },
+      // All categories coverage
+      { id: 'tx051', descricao: 'PIX enviado — aluguel', valor: -1500.00, tipo: 'debito', categoria: 'PIX', data: d(50), status: 'aprovada', walletId: 'w8', walletNome: 'PIX Limite', merchant: 'PIX' },
+      { id: 'tx052', descricao: 'Boleto — IPTU parcela 3', valor: -245.00, tipo: 'debito', categoria: 'Boleto', data: d(100), status: 'aprovada', walletId: 'w1', walletNome: 'Flexível ACT 2026', merchant: 'Prefeitura SP' },
+      { id: 'tx053', descricao: 'QR Code — Padaria Luce', valor: -18.50, tipo: 'debito', categoria: 'QR Code', data: d(20), status: 'aprovada', walletId: 'w3', walletNome: 'Refeição/Alimentação', merchant: 'Padaria Luce' },
+      { id: 'tx054', descricao: 'Recarga Vivo', valor: -30.00, tipo: 'debito', categoria: 'Recarga', data: d(150), status: 'aprovada', walletId: 'w1', walletNome: 'Flexível ACT 2026', merchant: 'Vivo' },
+      { id: 'tx055', descricao: 'Saque bancário', valor: -200.00, tipo: 'debito', categoria: 'Saque', data: d(200), status: 'aprovada', walletId: 'w1', walletNome: 'Flexível ACT 2026', merchant: 'Banco do Brasil' },
+      { id: 'tx056', descricao: 'PIX Cash Out — banco', valor: -500.00, tipo: 'debito', categoria: 'PIX Cash Out', data: d(250), status: 'aprovada', walletId: 'w1', walletNome: 'Flexível ACT 2026', merchant: 'PIX Cash Out' },
+      { id: 'tx057', descricao: 'Home Office — Monitor Dell', valor: -890.00, tipo: 'debito', categoria: 'Home Office', data: d(300), status: 'aprovada', walletId: 'w1', walletNome: 'Flexível ACT 2026', merchant: 'Dell' },
+      { id: 'tx058', descricao: 'Educação — Curso Alura', valor: -79.90, tipo: 'debito', categoria: 'Educação', data: d(350), status: 'aprovada', walletId: 'w5', walletNome: 'Cultura', merchant: 'Alura' },
     ],
     '2': [
       { id: 'tx001', descricao: 'Restaurante Madero', valor: -89.00, tipo: 'debito', categoria: 'Refeição', data: d(3), status: 'aprovada', walletId: 'w1', walletNome: 'Refeição', merchant: 'Restaurante Madero' },
@@ -320,16 +344,16 @@ export function buildSeedTransactions() {
 export function buildSeedNotifications() {
   return {
     '1': [
-      { id: 'n1', tipo: 'credito', titulo: 'Crédito recebido!', mensagem: 'Seu benefício de Alimentação de R$ 600,00 foi creditado na carteira Refeição/Alimentação.', data: d(1), lida: false },
-      { id: 'n2', tipo: 'pagamento', titulo: 'Compra aprovada', mensagem: 'Pagamento de R$ 42,90 no IKD Restaurante realizado com sucesso.', data: d(2), lida: true },
-      { id: 'n3', tipo: 'pagamento', titulo: 'Uber - viagem finalizada', mensagem: 'Débito de R$ 18,70 na carteira Transporte — Uber Trip.', data: d(3), lida: true },
-      { id: 'n4', tipo: 'sistema', titulo: 'Novo cartão virtual disponível', mensagem: 'Você pode criar um cartão virtual para compras online com segurança extra.', data: d(24), lida: false },
-      { id: 'n5', tipo: 'promocao', titulo: '20% OFF em farmácias parceiras', mensagem: 'Use seu cartão Origami em farmácias parceiras e ganhe 20% de desconto até 30/06.', data: d(48), lida: false },
-      { id: 'n6', tipo: 'credito', titulo: 'Crédito de Transporte', mensagem: 'Seu benefício de Transporte de R$ 400,00 foi creditado.', data: d(72), lida: true },
-      { id: 'n7', tipo: 'pagamento', titulo: 'Compra parcelada aprovada', mensagem: 'Amazon.com.br — R$ 129,90 em 3x de R$ 43,30 na carteira Cultura.', data: d(96), lida: true },
-      { id: 'n8', tipo: 'sistema', titulo: 'Atualização de segurança', mensagem: 'Atualizamos nossas políticas de privacidade. Confira as mudanças na aba Segurança.', data: d(120), lida: true },
-      { id: 'n9', tipo: 'promocao', titulo: 'Cashback em streaming!', mensagem: 'Pague Netflix e Spotify com a carteira Cultura e ganhe 10% de cashback.', data: d(168), lida: true },
-      { id: 'n10', tipo: 'sistema', titulo: 'Extrato disponível', mensagem: 'O extrato do mês anterior já está disponível para download.', data: d(240), lida: true },
+      { id: 'n1', tipo: 'credito', titulo: 'Crédito recebido!', mensagem: 'Seu benefício de Alimentação de R$ 600,00 foi creditado na carteira Refeição/Alimentação.', data: d(1), lida: false, actionUrl: '/wallets/w3' },
+      { id: 'n2', tipo: 'pagamento', titulo: 'Compra aprovada', mensagem: 'Pagamento de R$ 42,90 no IKD Restaurante realizado com sucesso.', data: d(2), lida: true, actionUrl: '/transactions/tx001' },
+      { id: 'n3', tipo: 'pagamento', titulo: 'Uber - viagem finalizada', mensagem: 'Débito de R$ 18,70 na carteira Transporte — Uber Trip.', data: d(3), lida: true, actionUrl: null },
+      { id: 'n4', tipo: 'sistema', titulo: 'Novo cartão virtual disponível', mensagem: 'Você pode criar um cartão virtual para compras online com segurança extra.', data: d(24), lida: false, actionUrl: '/cards' },
+      { id: 'n5', tipo: 'promocao', titulo: '20% OFF em farmácias parceiras', mensagem: 'Use seu cartão Origami em farmácias parceiras e ganhe 20% de desconto até 30/06.', data: d(48), lida: false, actionUrl: '/partners?category=farmacia' },
+      { id: 'n6', tipo: 'credito', titulo: 'Crédito de Transporte', mensagem: 'Seu benefício de Transporte de R$ 400,00 foi creditado.', data: d(72), lida: true, actionUrl: null },
+      { id: 'n7', tipo: 'pagamento', titulo: 'Compra parcelada aprovada', mensagem: 'Amazon.com.br — R$ 129,90 em 3x de R$ 43,30 na carteira Cultura.', data: d(96), lida: true, actionUrl: null },
+      { id: 'n8', tipo: 'sistema', titulo: 'Atualização de segurança', mensagem: 'Atualizamos nossas políticas de privacidade. Confira as mudanças na aba Segurança.', data: d(120), lida: true, actionUrl: '/security' },
+      { id: 'n9', tipo: 'promocao', titulo: 'Cashback em streaming!', mensagem: 'Pague Netflix e Spotify com a carteira Cultura e ganhe 10% de cashback.', data: d(168), lida: true, actionUrl: '/vouchers' },
+      { id: 'n10', tipo: 'sistema', titulo: 'Extrato disponível', mensagem: 'O extrato do mês anterior já está disponível para download.', data: d(240), lida: true, actionUrl: '/statement' },
     ],
     '2': [
       { id: 'n1', tipo: 'credito', titulo: 'Crédito recebido!', mensagem: 'Seu benefício de Refeição de R$ 600,00 foi creditado.', data: d(2), lida: false },
@@ -417,6 +441,9 @@ export const SEED_PARTNERS = [
   { id: 'p8', name: 'Bob\'s Paulista', category: 'lanchonete', address: 'Av. Paulista, 1106 — Bela Vista, SP', distance: '0.3 km', rating: 3.9, acceptedBenefits: ['refeicao','alimentacao','flexivel'], discount: 'Combo especial', isOpen: true, lat: -23.565, lng: -46.652, description: 'Fast food clássico com hambúrgueres e milkshakes.', phone: '(11) 3253-1106', hours: 'Todos os dias 10h–23h' },
   { id: 'p9', name: 'iFood Restaurante Parceiro', category: 'restaurante', address: 'Av. Brigadeiro Luís Antônio, 500', distance: '1.5 km', rating: 4.3, acceptedBenefits: ['refeicao','flexivel'], discount: 'Frete grátis', isOpen: true, lat: -23.576, lng: -46.658, description: 'Culinária contemporânea brasileira.', phone: '(11) 3253-0500', hours: 'Seg–Sex 11h–22h | Sáb–Dom 12h–22h' },
   { id: 'p10', name: 'Clínica Einstein Paulista', category: 'saude', address: 'Av. Paulista, 1000 — Bela Vista, SP', distance: '0.7 km', rating: 4.8, acceptedBenefits: ['saude'], discount: null, isOpen: true, lat: -23.568, lng: -46.650, description: 'Unidade ambulatorial do Hospital Israelita Albert Einstein.', phone: '(11) 4000-1000', hours: 'Seg–Sex 07h–19h' },
+  { id: 'p11', name: 'Alura Cursos', category: 'educacao', address: 'R. Vergueiro, 3185 — Vila Mariana, SP', distance: '3.2 km', rating: 4.7, acceptedBenefits: ['educacao','cultura','flexivel'], discount: '30% corporativo', isOpen: true, lat: -23.588, lng: -46.636, description: 'Plataforma de cursos de tecnologia com mais de 1.000 cursos.', phone: '(11) 4003-0900', hours: 'Online 24h' },
+  { id: 'p12', name: 'Localiza Rent a Car', category: 'transporte', address: 'Av. Paulista, 1499 — Bela Vista, SP', distance: '0.6 km', rating: 4.0, acceptedBenefits: ['transporte','flexivel'], discount: '15% em diárias', isOpen: true, lat: -23.563, lng: -46.654, description: 'Locadora de veículos com frota diversificada.', phone: '(11) 3048-1499', hours: 'Seg–Sex 07h–21h | Sáb 08h–17h' },
+  { id: 'p13', name: 'Kalunga Papelaria', category: 'papelaria', address: 'R. Augusta, 1050 — Consolação, SP', distance: '0.9 km', rating: 4.1, acceptedBenefits: ['homeoffice','flexivel'], discount: null, isOpen: false, lat: -23.555, lng: -46.660, description: 'Papelaria e informática para escritório e home office.', phone: '(11) 3214-1050', hours: 'Seg–Sex 08h–18h | Sáb 09h–14h' },
 ]
 
 // ─── Approvals (5) ──────────────────────────────────────────────────────────
@@ -449,6 +476,9 @@ export function buildSeedReimbursements() {
     { id: 'reimb-003', category: 'Alimentação', amount: 42.50, date: dDays(15), description: 'Kit lanche reunião remota', status: 'aprovado', receiptUrl: 'https://mock.origami.com.br/receipts/reimb-003.pdf', resolvedAt: dDays(13) },
     { id: 'reimb-004', category: 'Educação', amount: 120.00, date: dDays(20), description: 'Livro técnico — Clean Code', status: 'pago', receiptUrl: 'https://mock.origami.com.br/receipts/reimb-004.pdf', resolvedAt: dDays(18) },
     { id: 'reimb-005', category: 'Saúde', amount: 75.00, date: dDays(30), description: 'Óculos de grau', status: 'rejeitado', receiptUrl: null, resolvedAt: dDays(28) },
+    // All categories coverage with receipt URLs
+    { id: 'reimb-006', category: 'Transporte', amount: 156.00, date: dDays(5), description: 'Passagem aérea SP-RJ reunião cliente', status: 'aprovado', receiptUrl: 'https://mock.origami.com.br/receipts/reimb-006.pdf', resolvedAt: dDays(3) },
+    { id: 'reimb-007', category: 'Outros', amount: 89.00, date: dDays(12), description: 'Material de apresentação para evento', status: 'aguardando', receiptUrl: 'https://mock.origami.com.br/receipts/reimb-007.pdf', resolvedAt: null },
   ]
 }
 
@@ -457,7 +487,7 @@ export function buildSeedBalanceRequests() {
   return [
     { id: 'br-001', walletId: 'w3', amount: 500.00, justificativa: 'Início de mês — saldo insuficiente', status: 'aguardando', createdAt: dDays(1), updatedAt: null, approvedBy: null, rejectionReason: null },
     { id: 'br-002', walletId: 'w6', amount: 200.00, justificativa: 'Procedimento cirúrgico emergencial', status: 'aprovado', createdAt: dDays(5), updatedAt: dDays(4), approvedBy: 'Gerente RH', rejectionReason: null },
-    { id: 'br-003', walletId: 'w4', amount: 100.00, justificativa: 'Semana de viagens a trabalho SP→RJ', status: 'rejeitado', createdAt: dDays(10), updatedAt: dDays(9), approvedBy: null, rejectionReason: 'Saldo dentro do limite mensal' },
+    { id: 'br-003', walletId: 'w4', amount: 100.00, justificativa: 'Semana de viagens a trabalho SP→RJ', status: 'rejeitado', createdAt: dDays(10), updatedAt: dDays(9), approvedBy: 'Diretor Financeiro', rejectionReason: 'Saldo dentro do limite mensal — não se aplica política de exceção' },
     { id: 'br-004', walletId: 'w1', amount: 300.00, justificativa: 'Evento corporativo — alimentação extra', status: 'aguardando', createdAt: dDays(2), updatedAt: null, approvedBy: null, rejectionReason: null },
     { id: 'br-005', walletId: 'w5', amount: 150.00, justificativa: 'Ingressos para evento cultural da equipe', status: 'aprovado', createdAt: dDays(7), updatedAt: dDays(6), approvedBy: 'Coordenador de Cultura', rejectionReason: null },
   ]
@@ -470,6 +500,12 @@ export function buildSeedExpenses() {
     { id: 'exp-002', description: 'Uber reunião matriz', amount: 32.50, date: dDays(3), category: 'transporte', receiptUrl: null, lat: null, lng: null, merchant: 'Uber' },
     { id: 'exp-003', description: 'Material escritório', amount: 45.00, date: dDays(5), category: 'outros', receiptUrl: 'https://mock.origami.com.br/receipts/exp-003.pdf', lat: null, lng: null, merchant: 'Kalunga' },
     { id: 'exp-004', description: 'Jantar equipe sprint', amount: 280.00, date: dDays(7), category: 'refeicao', receiptUrl: null, lat: -23.575, lng: -46.668, merchant: 'Restaurante Madero' },
+    // All categories + receipt URL + lat/lng coverage
+    { id: 'exp-005', description: 'Consulta oftalmologista', amount: 250.00, date: dDays(4), category: 'saude', receiptUrl: 'https://mock.origami.com.br/receipts/exp-005.pdf', lat: -23.568, lng: -46.650, merchant: 'Clínica Einstein' },
+    { id: 'exp-006', description: 'Curso Figma avançado', amount: 149.90, date: dDays(6), category: 'educacao', receiptUrl: 'https://mock.origami.com.br/receipts/exp-006.pdf', lat: null, lng: null, merchant: 'Alura' },
+    { id: 'exp-007', description: 'Cadeira ergonômica', amount: 850.00, date: dDays(10), category: 'homeoffice', receiptUrl: 'https://mock.origami.com.br/receipts/exp-007.pdf', lat: -23.564, lng: -46.651, merchant: 'Kalunga' },
+    { id: 'exp-008', description: 'Supermercado compras semana', amount: 312.40, date: dDays(1), category: 'alimentacao', receiptUrl: 'https://mock.origami.com.br/receipts/exp-008.pdf', lat: -23.558, lng: -46.662, merchant: 'Pão de Açúcar' },
+    { id: 'exp-009', description: 'Uber ida e volta reunião', amount: 47.20, date: dDays(3), category: 'transporte', receiptUrl: null, lat: -23.570, lng: -46.648, merchant: 'Uber' },
   ]
 }
 
@@ -489,7 +525,7 @@ export function buildSeedReports() {
   return [
     { id: 'rep-001', title: 'Viagem SP-RJ Março', period: '2026-03', totalAmount: 1122.40, expenseCount: 3, status: 'aprovado', createdAt: dDays(10), submittedAt: dDays(9), expenseIds: ['exp-001','exp-002','exp-003'] },
     { id: 'rep-002', title: 'Sprint Review Fevereiro', period: '2026-02', totalAmount: 325.30, expenseCount: 2, status: 'reprovado', createdAt: dDays(20), submittedAt: dDays(19), expenseIds: ['exp-004'] },
-    { id: 'rep-003', title: 'Material Home Office Jan', period: '2026-01', totalAmount: 45.00, expenseCount: 1, status: 'rascunho', createdAt: dDays(2), submittedAt: null, expenseIds: [] },
+    { id: 'rep-003', title: 'Material Home Office Jan', period: '2026-01', totalAmount: 895.00, expenseCount: 2, status: 'rascunho', createdAt: dDays(2), submittedAt: null, expenseIds: ['exp-003','exp-007'] },
   ]
 }
 
@@ -512,6 +548,9 @@ export function buildSeedAvailableVouchers() {
 export function buildSeedMyVouchers() {
   return [
     { id: 'vou-my-001', merchantName: 'Rappi', description: '15% OFF no primeiro pedido', faceValue: 40.00, salePrice: 0.00, category: 'alimentacao', logoUrl: null, expiresAt: dFuture(5), status: 'purchased', code: 'RAPPI15MOCK' },
+    { id: 'vou-my-002', merchantName: 'iFood', description: 'R$ 30 em pedidos acima de R$ 50', faceValue: 30.00, salePrice: 22.00, category: 'alimentacao', logoUrl: null, expiresAt: dFuture(20), status: 'purchased', code: 'IFOOD30-XK9M2' },
+    { id: 'vou-my-003', merchantName: 'Cinemark', description: 'Ingresso 2D qualquer sessão', faceValue: 35.00, salePrice: 25.00, category: 'entretenimento', logoUrl: null, expiresAt: dDays(5), status: 'expired', code: 'CINE-EXPIRED-001' },
+    { id: 'vou-my-004', merchantName: 'Smart Fit', description: '1 mês grátis de academia', faceValue: 99.90, salePrice: 0.00, category: 'saude', logoUrl: null, expiresAt: dFuture(15), status: 'purchased', code: 'SMARTFIT-FREE-2026' },
   ]
 }
 
@@ -522,6 +561,8 @@ export const SEED_GEOFENCE_ZONES = [
   { id: 'gz-003', name: 'Mercado Livre Hub', description: 'Hub de parceiros ML', latitude: -23.5489, longitude: -46.6388, radiusMeters: 200, isActive: true, partnerId: null, type: 'partner' },
   { id: 'gz-004', name: 'Aeroporto Congonhas', description: 'Check-in automático viagens', latitude: -23.6271, longitude: -46.6559, radiusMeters: 500, isActive: false, partnerId: null, type: 'airport' },
   { id: 'gz-005', name: 'Shopping Ibirapuera', description: 'Parceiros no shopping', latitude: -23.5897, longitude: -46.6612, radiusMeters: 250, isActive: true, partnerId: null, type: 'mall' },
+  { id: 'gz-006', name: 'Zona Restrita — CPD', description: 'Área restrita do centro de processamento de dados', latitude: -23.5550, longitude: -46.6400, radiusMeters: 50, isActive: true, partnerId: null, type: 'restricted' },
+  { id: 'gz-007', name: 'Estação Consolação', description: 'Zona de trânsito — metrô Consolação', latitude: -23.5567, longitude: -46.6604, radiusMeters: 150, isActive: true, partnerId: null, type: 'transit' },
 ]
 
 // ─── Digital Wallet Cards (3) ───────────────────────────────────────────────
