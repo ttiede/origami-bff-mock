@@ -412,6 +412,7 @@ export const typeDefs = /* GraphQL */ `
     primeiroAcesso: Boolean!
     bloqueioDefinitivo: Boolean!
     tentativasFalhas: Int!
+    bloqueioAte: String
   }
 
   type TokenPair {

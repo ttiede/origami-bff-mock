@@ -12,7 +12,7 @@ import {
   getReports, getAvailableVouchers, getMyVouchers,
   getGeofenceZones, getDigitalWalletCards,
   getExternalBenefits, getRewardsSummary,
-  getSensitiveData, getScheduledDeposits, getNextDeposits,
+  getSensitiveData, getScheduledDeposits, getNextDeposits, hasNextDepositsEntry,
   getCardDelivery, getKycResult,
   getBanners, getFaqs,
   getStaticSessionsList, getSecurityActivityList,
@@ -86,6 +86,7 @@ export const resolvers = {
         cargo: user.cargo, primeiroAcesso: user.primeiroAcesso,
         bloqueioDefinitivo: user.bloqueioDefinitivo,
         tentativasFalhas: user.tentativasFalhas,
+        bloqueioAte: user.bloqueioAte ?? null,
       }
     },
 
@@ -135,12 +136,14 @@ export const resolvers = {
     }),
 
     nextDeposits: (_, { walletId } = {}, context) => {
-      const deposits = getNextDeposits(uid(context))
-      if (deposits.length > 0) {
+      const userId = uid(context)
+      const deposits = getNextDeposits(userId)
+      // If user has explicit seed data (even empty), return it as-is
+      if (deposits.length > 0 || hasNextDepositsEntry(userId)) {
         return walletId ? deposits.filter(d => d.walletId === walletId) : deposits
       }
       // Fallback for users without seed deposits
-      const wallets = getWallets(uid(context))
+      const wallets = getWallets(userId)
       const filtered = walletId ? wallets.filter(w => w.id === walletId) : wallets.slice(0, 2)
       return filtered.map((w, i) => ({
         walletId: w.id,

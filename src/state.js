@@ -246,6 +246,7 @@ export function getNotifPrefs(userId) {
 export function getSensitiveData() { return SENSITIVE_DATA }
 export function getScheduledDeposits() { return state.scheduledDeposits }
 export function getNextDeposits(userId) { return state.nextDepositsByUser[String(userId)] ?? [] }
+export function hasNextDepositsEntry(userId) { return String(userId) in state.nextDepositsByUser }
 export function getCardDelivery(cardId) { return state.cardDeliveries[cardId] ?? null }
 export function getKycResult(userId) { return state.kycResultsByUser[String(userId)] ?? null }
 
