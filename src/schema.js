@@ -351,8 +351,19 @@ export const typeDefs = /* GraphQL */ `
     # External Benefits
     activateBenefit(id: ID!): MutationResult!
 
+    # Flow Tokens
+    startFlow(flowType: String!): FlowToken!
+    validateFlowToken(token: String!): Boolean!
+
     # Expenses — OCR
     ocrReceipt(imageBase64: String!): OcrReceiptResult!
+  }
+
+  # ─── Flow Token types ──────────────────────────────────────────────
+  type FlowToken {
+    token: String!
+    flowType: String!
+    expiresAt: String!
   }
 
   # ─── Common result types ────────────────────────────────────────────

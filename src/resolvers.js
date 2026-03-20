@@ -34,6 +34,10 @@ import {
   updateUserPassword, resetFailedAttempts,
 } from './state.js'
 
+// ── Flow token state ──────────────────────────────────────────────────────────
+const _flowTokens = new Map()
+let _flowTokenCounter = 0
+
 // Tokens OTP / device válidos (espelho do mock Flutter)
 const VALID_OTP_CODE    = '1234'
 const VALID_DEVICE_TOKEN = '2222'
@@ -812,6 +816,26 @@ export const resolvers = {
       const result = toggleGeofenceZone(id, active)
       logMutation('toggleGeofenceZone', `zone:${id} → isActive:${result}`)
       return result ?? false
+    },
+
+    // ── Flow Tokens ─────────────────────────────────────────────
+    startFlow: (_, { flowType }) => {
+      _flowTokenCounter++
+      const token = `flow_${flowType}_${Date.now()}_${_flowTokenCounter}`
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString()
+      _flowTokens.set(token, { flowType, expiresAt, createdAt: new Date().toISOString() })
+      logMutation('startFlow', `type:${flowType} token:${token.slice(0, 30)}...`)
+      return { token, flowType, expiresAt }
+    },
+
+    validateFlowToken: (_, { token }) => {
+      const entry = _flowTokens.get(token)
+      if (!entry) return false
+      if (new Date() > new Date(entry.expiresAt)) {
+        _flowTokens.delete(token)
+        return false
+      }
+      return true
     },
 
     // ── External Benefits ─────────────────────────────────────────
