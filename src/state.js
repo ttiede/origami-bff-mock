@@ -9,7 +9,7 @@ import {
   SEED_GEOFENCE_ZONES,
   SEED_DIGITAL_WALLET_CARDS,
   SENSITIVE_DATA,
-  FAVORITE_PARTNER_IDS,
+  SEED_FAVORITE_PARTNER_IDS as FAVORITE_PARTNER_IDS,
   buildSeedWallets,
   buildSeedTransactions,
   buildSeedNotifications,
@@ -25,11 +25,12 @@ import {
   buildSeedNextDeposits,
   buildSeedCardDeliveries,
   buildSeedKycResults,
+  buildSeedSessions,
+  buildSeedSecurityActivity,
 } from './seeds.js'
 
 import {
   BANNERS, FAQS, EXTERNAL_BENEFITS, REWARDS_SUMMARY, SP_TRANS_CARDS,
-  getStaticSessions, getSecurityActivity,
 } from './data/static.js'
 
 // ─── Deep clone utility ─────────────────────────────────────────────────────
@@ -58,6 +59,9 @@ const state = {
   digitalWalletCards: [],
   externalBenefits: [],
   rewardsSummary: null,
+
+  sessionsByUser: {},      // { [userId]: [AuthSession] }
+  securityByUser: {},      // { [userId]: [SecurityEvent] }
 
   nextDepositsByUser: {},  // { [userId]: [{ walletId, amount, scheduledDate, description }] }
   cardDeliveries: {},      // { [cardId]: CardDelivery }
@@ -119,6 +123,8 @@ export function reset() {
   state.digitalWalletCards = clone(SEED_DIGITAL_WALLET_CARDS)
   state.externalBenefits = clone(EXTERNAL_BENEFITS)
   state.rewardsSummary = clone(REWARDS_SUMMARY)
+  state.sessionsByUser = buildSeedSessions()
+  state.securityByUser = buildSeedSecurityActivity()
   state.nextDepositsByUser = buildSeedNextDeposits()
   state.cardDeliveries = buildSeedCardDeliveries()
   state.kycResultsByUser = buildSeedKycResults()
@@ -245,8 +251,38 @@ export function getKycResult(userId) { return state.kycResultsByUser[String(user
 // Static data (never mutated)
 export function getBanners() { return BANNERS }
 export function getFaqs() { return FAQS }
-export function getStaticSessionsList() { return getStaticSessions() }
-export function getSecurityActivityList() { return getSecurityActivity() }
+
+// Sessions & security — now dynamic from state
+export function getStaticSessionsList(userId) {
+  return state.sessionsByUser[String(userId)] ?? state.sessionsByUser['1'] ?? []
+}
+export function getSecurityActivityList(userId) {
+  return state.securityByUser[String(userId)] ?? state.securityByUser['1'] ?? []
+}
+
+// Nearby partners — Haversine distance filter
+export function getNearbyPartners(lat, lng, radiusKm = 5) {
+  const R = 6371 // Earth radius in km
+  return state.partners.filter(p => {
+    if (p.lat == null || p.lng == null) return false
+    const dLat = (p.lat - lat) * Math.PI / 180
+    const dLng = (p.lng - lng) * Math.PI / 180
+    const a = Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat * Math.PI / 180) * Math.cos(p.lat * Math.PI / 180) *
+      Math.sin(dLng / 2) ** 2
+    const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    return dist <= radiusKm
+  }).map(p => {
+    // Recalculate distance string
+    const dLat = (p.lat - lat) * Math.PI / 180
+    const dLng = (p.lng - lng) * Math.PI / 180
+    const a = Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat * Math.PI / 180) * Math.cos(p.lat * Math.PI / 180) *
+      Math.sin(dLng / 2) ** 2
+    const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    return { ...p, distance: dist < 1 ? `${Math.round(dist * 1000)} m` : `${dist.toFixed(1)} km` }
+  }).sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance))
+}
 
 // ─── Mutators ───────────────────────────────────────────────────────────────
 

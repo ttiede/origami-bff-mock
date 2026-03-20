@@ -6,7 +6,7 @@ import {
   getWallets, findWallet,
   getCards, getCardById, getTransactions,
   getNotifications, getNotifPrefs,
-  getPartners, getPartnerById, getFavoritePartners,
+  getPartners, getPartnerById, getFavoritePartners, getNearbyPartners,
   getApprovals, getDisputes, getReimbursements,
   getBalanceRequests, getExpenses, getAdvances,
   getReports, getAvailableVouchers, getMyVouchers,

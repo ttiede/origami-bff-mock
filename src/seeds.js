@@ -466,18 +466,45 @@ export const SEED_PARTNERS = [
 
   // farmacia (3)
   { id: 'p2', name: 'Drogaria Raia', category: 'farmacia', address: 'R. Augusta, 723 — Consolação, SP', distance: '0.5 km', rating: 4.2, acceptedBenefits: ['saude','flexivel'], discount: null, isOpen: true, lat: -23.561, lng: -46.657, description: 'Farmácia com manipulação e convênio médico.', phone: '(11) 3214-0723', hours: 'Todos os dias 07h–22h' },
+  { id: 'p15', name: 'Drogasil', category: 'farmacia', address: 'Av. Rebouças, 1150 — Pinheiros, SP', distance: '2.1 km', rating: 4.0, acceptedBenefits: ['saude','flexivel'], discount: '15% em genéricos', isOpen: true, lat: -23.566, lng: -46.674, description: 'Rede de farmácias com app de descontos e programa de fidelidade.', phone: '(11) 3082-1150', hours: 'Todos os dias 07h–23h' },
+  { id: 'p23', name: 'Droga Raia 24h', category: 'farmacia', address: 'R. da Consolação, 3000 — Consolação, SP', distance: '1.4 km', rating: 4.3, acceptedBenefits: ['saude','flexivel'], discount: null, isOpen: true, lat: -23.552, lng: -46.663, description: 'Unidade 24h com delivery e manipulação.', phone: '(11) 3214-3000', hours: 'Todos os dias 24h' },
+
+  // supermercado (2)
   { id: 'p3', name: 'Pão de Açúcar', category: 'supermercado', address: 'Av. Paulista, 2064 — Jardim Paulista, SP', distance: '0.8 km', rating: 4.3, acceptedBenefits: ['alimentacao','flexivel'], discount: '5% em produtos selecionados', isOpen: true, lat: -23.558, lng: -46.662, description: 'Supermercado premium com hortifruti orgânico e padaria.', phone: '(11) 3064-2064', hours: 'Todos os dias 07h–23h' },
-  { id: 'p4', name: 'Smart Fit', category: 'academia', address: 'Av. Paulista, 807 — Bela Vista, SP', distance: '0.4 km', rating: 4.1, acceptedBenefits: ['saude','flexivel'], discount: 'Matrícula grátis', isOpen: true, lat: -23.570, lng: -46.648, description: 'Academia com musculação, cardio e aulas coletivas.', phone: '(11) 4000-0807', hours: 'Seg–Sex 06h–23h | Sáb–Dom 08h–20h' },
-  { id: 'p5', name: 'Cinemark Paulista', category: 'cinema', address: 'Al. Santos, 1000 — Jardim Paulista, SP', distance: '1.1 km', rating: 4.4, acceptedBenefits: ['cultura','flexivel'], discount: '50% na 2ª entrada', isOpen: true, lat: -23.575, lng: -46.670, description: 'Multiplex com salas 3D e XD. Estacionamento no local.', phone: '(11) 3266-1000', hours: 'Todos os dias 12h–23h' },
+  { id: 'p16', name: 'Carrefour Express', category: 'supermercado', address: 'R. Haddock Lobo, 400 — Cerqueira César, SP', distance: '1.0 km', rating: 3.8, acceptedBenefits: ['alimentacao','flexivel'], discount: null, isOpen: false, lat: -23.560, lng: -46.665, description: 'Supermercado compacto para compras do dia a dia.', phone: '(11) 3083-0400', hours: 'Todos os dias 07h–22h' },
+
+  // posto (2)
   { id: 'p6', name: 'Posto Ipiranga', category: 'posto', address: 'R. da Consolação, 222 — Consolação, SP', distance: '0.6 km', rating: 4.0, acceptedBenefits: ['flexivel','transporte'], discount: null, isOpen: true, lat: -23.567, lng: -46.655, description: 'Posto com loja de conveniência am/pm 24h.', phone: '(11) 3214-0222', hours: 'Todos os dias 24h' },
+  { id: 'p17', name: 'Posto Shell', category: 'posto', address: 'Av. Rebouças, 600 — Pinheiros, SP', distance: '1.7 km', rating: 4.2, acceptedBenefits: ['transporte','flexivel'], discount: 'R$0,10/litro no app', isOpen: true, lat: -23.568, lng: -46.672, description: 'Posto com Shell Box e lavagem automotiva.', phone: '(11) 3081-0600', hours: 'Todos os dias 24h' },
+
+  // academia (2)
+  { id: 'p4', name: 'Smart Fit', category: 'academia', address: 'Av. Paulista, 807 — Bela Vista, SP', distance: '0.4 km', rating: 4.1, acceptedBenefits: ['saude','flexivel'], discount: 'Matrícula grátis', isOpen: true, lat: -23.570, lng: -46.648, description: 'Academia com musculação, cardio e aulas coletivas.', phone: '(11) 4000-0807', hours: 'Seg–Sex 06h–23h | Sáb–Dom 08h–20h' },
+  { id: 'p18', name: 'Bio Ritmo', category: 'academia', address: 'R. Oscar Freire, 533 — Jardins, SP', distance: '2.0 km', rating: 4.5, acceptedBenefits: ['saude','flexivel'], discount: null, isOpen: true, lat: -23.562, lng: -46.672, description: 'Academia premium com piscina, spa e aulas especiais.', phone: '(11) 3062-0533', hours: 'Seg–Sex 06h–23h | Sáb 08h–18h | Dom 08h–14h' },
+
+  // cinema (2)
+  { id: 'p5', name: 'Cinemark Paulista', category: 'cinema', address: 'Al. Santos, 1000 — Jardim Paulista, SP', distance: '1.1 km', rating: 4.4, acceptedBenefits: ['cultura','flexivel'], discount: '50% na 2ª entrada', isOpen: true, lat: -23.575, lng: -46.670, description: 'Multiplex com salas 3D e XD. Estacionamento no local.', phone: '(11) 3266-1000', hours: 'Todos os dias 12h–23h' },
+  { id: 'p19', name: 'Kinoplex Itaim', category: 'cinema', address: 'R. Joaquim Floriano, 466 — Itaim Bibi, SP', distance: '3.5 km', rating: 4.3, acceptedBenefits: ['cultura','flexivel'], discount: null, isOpen: false, lat: -23.585, lng: -46.675, description: 'Cinema com salas premium e bombonière artesanal.', phone: '(11) 3168-0466', hours: 'Todos os dias 13h–23h' },
+
+  // livraria (2)
   { id: 'p7', name: 'Livraria Cultura', category: 'livraria', address: 'Av. Paulista, 2073 — Consolação, SP', distance: '0.9 km', rating: 4.6, acceptedBenefits: ['cultura','flexivel'], discount: '10% em livros', isOpen: true, lat: -23.556, lng: -46.664, description: 'Maior livraria da Av. Paulista com cafeteria interna.', phone: '(11) 3170-4033', hours: 'Seg–Sáb 09h–22h | Dom 11h–20h' },
-  { id: 'p8', name: 'Bob\'s Paulista', category: 'lanchonete', address: 'Av. Paulista, 1106 — Bela Vista, SP', distance: '0.3 km', rating: 3.9, acceptedBenefits: ['refeicao','alimentacao','flexivel'], discount: 'Combo especial', isOpen: true, lat: -23.565, lng: -46.652, description: 'Fast food clássico com hambúrgueres e milkshakes.', phone: '(11) 3253-1106', hours: 'Todos os dias 10h–23h' },
-  { id: 'p9', name: 'iFood Restaurante Parceiro', category: 'restaurante', address: 'Av. Brigadeiro Luís Antônio, 500', distance: '1.5 km', rating: 4.3, acceptedBenefits: ['refeicao','flexivel'], discount: 'Frete grátis', isOpen: true, lat: -23.576, lng: -46.658, description: 'Culinária contemporânea brasileira.', phone: '(11) 3253-0500', hours: 'Seg–Sex 11h–22h | Sáb–Dom 12h–22h' },
-  { id: 'p10', name: 'Clínica Einstein Paulista', category: 'saude', address: 'Av. Paulista, 1000 — Bela Vista, SP', distance: '0.7 km', rating: 4.8, acceptedBenefits: ['saude'], discount: null, isOpen: true, lat: -23.568, lng: -46.650, description: 'Unidade ambulatorial do Hospital Israelita Albert Einstein.', phone: '(11) 4000-1000', hours: 'Seg–Sex 07h–19h' },
-  { id: 'p11', name: 'Alura Cursos', category: 'educacao', address: 'R. Vergueiro, 3185 — Vila Mariana, SP', distance: '3.2 km', rating: 4.7, acceptedBenefits: ['educacao','cultura','flexivel'], discount: '30% corporativo', isOpen: true, lat: -23.588, lng: -46.636, description: 'Plataforma de cursos de tecnologia com mais de 1.000 cursos.', phone: '(11) 4003-0900', hours: 'Online 24h' },
+  { id: 'p20', name: 'Livraria Saraiva', category: 'livraria', address: 'Shopping Morumbi — Av. Roque Petroni Jr, 1089, SP', distance: '8.0 km', rating: 4.1, acceptedBenefits: ['cultura','educacao','flexivel'], discount: null, isOpen: true, lat: -23.623, lng: -46.699, description: 'Livraria com seção acadêmica, papelaria e jogos.', phone: '(11) 5183-1089', hours: 'Seg–Sáb 10h–22h | Dom 12h–20h' },
+
+  // transporte (2)
   { id: 'p12', name: 'Localiza Rent a Car', category: 'transporte', address: 'Av. Paulista, 1499 — Bela Vista, SP', distance: '0.6 km', rating: 4.0, acceptedBenefits: ['transporte','flexivel'], discount: '15% em diárias', isOpen: true, lat: -23.563, lng: -46.654, description: 'Locadora de veículos com frota diversificada.', phone: '(11) 3048-1499', hours: 'Seg–Sex 07h–21h | Sáb 08h–17h' },
+  { id: 'p21', name: 'Movida', category: 'transporte', address: 'R. da Consolação, 2800 — Consolação, SP', distance: '1.3 km', rating: 3.9, acceptedBenefits: ['transporte','flexivel'], discount: null, isOpen: true, lat: -23.554, lng: -46.662, description: 'Locação de veículos com planos corporativos.', phone: '(11) 3123-2800', hours: 'Seg–Sex 07h–20h | Sáb 08h–14h' },
+
+  // educacao (2)
+  { id: 'p11', name: 'Alura Cursos', category: 'educacao', address: 'R. Vergueiro, 3185 — Vila Mariana, SP', distance: '3.2 km', rating: 4.7, acceptedBenefits: ['educacao','cultura','flexivel'], discount: '30% corporativo', isOpen: true, lat: -23.588, lng: -46.636, description: 'Plataforma de cursos de tecnologia com mais de 1.000 cursos.', phone: '(11) 4003-0900', hours: 'Online 24h' },
+  { id: 'p22', name: 'FIAP', category: 'educacao', address: 'Av. Paulista, 1106 — Bela Vista, SP', distance: '0.3 km', rating: 4.8, acceptedBenefits: ['educacao','flexivel'], discount: '20% na pós-graduação', isOpen: true, lat: -23.564, lng: -46.652, description: 'Faculdade de tecnologia com cursos de pós-graduação e MBA.', phone: '(11) 3385-8010', hours: 'Seg–Sex 08h–22h | Sáb 08h–13h' },
+
+  // lanchonete, saude, papelaria (extras)
+  { id: 'p8', name: 'Bob\'s Paulista', category: 'lanchonete', address: 'Av. Paulista, 1106 — Bela Vista, SP', distance: '0.3 km', rating: 3.9, acceptedBenefits: ['refeicao','alimentacao','flexivel'], discount: 'Combo especial', isOpen: true, lat: -23.565, lng: -46.652, description: 'Fast food clássico com hambúrgueres e milkshakes.', phone: '(11) 3253-1106', hours: 'Todos os dias 10h–23h' },
+  { id: 'p10', name: 'Clínica Einstein Paulista', category: 'saude', address: 'Av. Paulista, 1000 — Bela Vista, SP', distance: '0.7 km', rating: 4.8, acceptedBenefits: ['saude'], discount: null, isOpen: true, lat: -23.568, lng: -46.650, description: 'Unidade ambulatorial do Hospital Israelita Albert Einstein.', phone: '(11) 4000-1000', hours: 'Seg–Sex 07h–19h' },
   { id: 'p13', name: 'Kalunga Papelaria', category: 'papelaria', address: 'R. Augusta, 1050 — Consolação, SP', distance: '0.9 km', rating: 4.1, acceptedBenefits: ['homeoffice','flexivel'], discount: null, isOpen: false, lat: -23.555, lng: -46.660, description: 'Papelaria e informática para escritório e home office.', phone: '(11) 3214-1050', hours: 'Seg–Sex 08h–18h | Sáb 09h–14h' },
 ]
+
+// Favorite partner IDs — at least 3 for testing
+export const SEED_FAVORITE_PARTNER_IDS = ['p1', 'p4', 'p7']
 
 // ─── Approvals (5) ──────────────────────────────────────────────────────────
 export function buildSeedApprovals() {
@@ -591,11 +618,9 @@ export function buildSeedMyVouchers() {
 export function buildSeedNextDeposits() {
   return {
     '1': [
-      { walletId: 'w1', amount: 500.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Flexível ACT 2026' },
       { walletId: 'w3', amount: 600.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Refeição/Alimentação' },
-      { walletId: 'w4', amount: 400.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Transporte' },
-      { walletId: 'w5', amount: 200.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Cultura' },
-      { walletId: 'w6', amount: 500.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Saúde' },
+      { walletId: 'w4', amount: 280.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Transporte' },
+      { walletId: 'w1', amount: 500.00, scheduledDate: dFuture(12).substring(0, 10), description: 'Crédito mensal — Flexível ACT 2026' },
     ],
     '2': [
       { walletId: 'w1', amount: 600.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Refeição' },
@@ -747,4 +772,3 @@ export const SEED_DIGITAL_WALLET_CARDS = [
 // ─── Static data (banners, FAQs, external benefits, rewards, sessions, security) ─
 export { BANNERS, FAQS, EXTERNAL_BENEFITS, REWARDS_SUMMARY, SP_TRANS_CARDS } from './data/static.js'
 export { SENSITIVE_DATA } from './data/cards.js'
-export { FAVORITE_PARTNER_IDS } from './data/partners.js'
