@@ -178,7 +178,7 @@ export const typeDefs = /* GraphQL */ `
 
     # Wallet
     wallets: [Wallet!]!
-    transactions(walletId: ID, dateFrom: String, dateTo: String, categoria: String, direcao: String, limit: Int, offset: Int): [Transaction!]!
+    transactions(walletId: ID, dateFrom: String, dateTo: String, categoria: String, direcao: String, search: String, limit: Int, offset: Int): [Transaction!]!
     balancesByCategory: [CategoryBalance!]!
     validatePixKey(chavePix: String!, tipoChave: String!): PixKeyInfo
     nextDeposits(walletId: ID): [NextDeposit!]!
@@ -195,7 +195,7 @@ export const typeDefs = /* GraphQL */ `
     notificationPreferences: NotificationPreferences!
 
     # Partners
-    partners(category: String, benefit: String): [Partner!]!
+    partners(category: String, benefit: String, search: String): [Partner!]!
     nearbyPartners(lat: Float!, lng: Float!, radiusKm: Float): [Partner!]!
     partner(id: ID!): Partner
     favoritePartners: [Partner!]!

@@ -95,13 +95,21 @@ export const resolvers = {
     // ── Wallet ────────────────────────────────────────────────────
     wallets: (_, __, context) => getWallets(uid(context)),
 
-    transactions: (_, { walletId, dateFrom, dateTo, categoria, direcao, limit, offset } = {}, context) => {
+    transactions: (_, { walletId, dateFrom, dateTo, categoria, direcao, search, limit, offset } = {}, context) => {
       let txs = getTransactions(uid(context))
       if (walletId)   txs = txs.filter(t => t.walletId === walletId)
       if (dateFrom)   txs = txs.filter(t => t.data >= dateFrom)
       if (dateTo)     txs = txs.filter(t => t.data <= dateTo + 'T23:59:59')
       if (categoria)  txs = txs.filter(t => t.categoria === categoria)
       if (direcao)    txs = txs.filter(t => t.direcao === direcao)
+      if (search) {
+        const q = search.toLowerCase()
+        txs = txs.filter(t =>
+          (t.merchant && t.merchant.toLowerCase().includes(q)) ||
+          (t.descricao && t.descricao.toLowerCase().includes(q)) ||
+          (t.estabelecimento && t.estabelecimento.toLowerCase().includes(q))
+        )
+      }
       if (offset)     txs = txs.slice(offset)
       if (limit)      txs = txs.slice(0, limit)
       return txs

@@ -206,6 +206,7 @@ export function getPartners(args = {}) {
   return state.partners.filter(p => {
     if (args.category && p.category !== args.category) return false
     if (args.benefit && !p.acceptedBenefits.includes(args.benefit)) return false
+    if (args.search && !p.name.toLowerCase().includes(args.search.toLowerCase())) return false
     return true
   })
 }
