@@ -793,6 +793,150 @@ export const SEED_DIGITAL_WALLET_CARDS = [
   { cardId: 'c3', cardLast4: '2210', cardBrand: 'elo', cardNome: 'LUCAS OLIVEIRA', provider: 'google_pay', isProvisioned: true, tokenId: 'tok-gp-002' },
 ]
 
+// ─── Clock Entries (5 for today) ────────────────────────────────────────────
+export function buildSeedClockEntries() {
+  const today = new Date().toISOString().slice(0, 10)
+  return [
+    { id: 'clk-001', employeeId: '1', timestamp: `${today}T08:02:15.000Z`, type: 'entry', reason: null, latitude: -23.5630, longitude: -46.6543, approved: true },
+    { id: 'clk-002', employeeId: '1', timestamp: `${today}T12:01:30.000Z`, type: 'break_out', reason: null, latitude: -23.5630, longitude: -46.6543, approved: true },
+    { id: 'clk-003', employeeId: '1', timestamp: `${today}T13:05:22.000Z`, type: 'break_in', reason: null, latitude: -23.5646, longitude: -46.6527, approved: true },
+    { id: 'clk-004', employeeId: '1', timestamp: `${today}T15:30:00.000Z`, type: 'break_out', reason: 'Consulta médica', latitude: -23.5630, longitude: -46.6543, approved: true },
+    { id: 'clk-005', employeeId: '1', timestamp: `${today}T16:45:10.000Z`, type: 'break_in', reason: 'Retorno consulta médica', latitude: -23.5630, longitude: -46.6543, approved: false },
+  ]
+}
+
+// ─── Hour Bank ──────────────────────────────────────────────────────────────
+export function buildSeedHourBank() {
+  return {
+    balanceMinutes: 480,
+    monthlyExtract: [
+      { month: '2026-01', creditedMinutes: 240, debitedMinutes: 60, balanceMinutes: 180 },
+      { month: '2026-02', creditedMinutes: 180, debitedMinutes: 120, balanceMinutes: 240 },
+      { month: '2026-03', creditedMinutes: 300, debitedMinutes: 60, balanceMinutes: 480 },
+    ],
+  }
+}
+
+// ─── Vacation Balance ───────────────────────────────────────────────────────
+export function buildSeedVacationBalance() {
+  return {
+    totalDays: 30,
+    usedDays: 10,
+    availableDays: 20,
+    accrualStart: '2025-04-01',
+    accrualEnd: '2026-03-31',
+  }
+}
+
+// ─── Vacation History (2 periods) ───────────────────────────────────────────
+export function buildSeedVacationHistory() {
+  return [
+    { id: 'vac-001', startDate: '2025-07-01', endDate: '2025-07-05', daysCount: 5, status: 'completed', approver: 'Maria Santos Ferreira' },
+    { id: 'vac-002', startDate: '2025-12-22', endDate: '2025-12-26', daysCount: 5, status: 'completed', approver: 'Maria Santos Ferreira' },
+  ]
+}
+
+// ─── Payslips (3 months) ────────────────────────────────────────────────────
+export function buildSeedPayslips() {
+  return [
+    {
+      id: 'pay-202601', month: 1, year: 2026, grossSalary: 12500.00, netSalary: 9875.50,
+      deductions: [
+        { description: 'INSS', amount: 1051.20 },
+        { description: 'IRRF', amount: 1318.30 },
+        { description: 'Plano de Saúde', amount: 255.00 },
+      ],
+      benefits: [
+        { description: 'Vale Refeição', amount: 600.00 },
+        { description: 'Vale Transporte', amount: 400.00 },
+        { description: 'PLR Proporcional', amount: 1041.67 },
+      ],
+      pdfUrl: 'https://mock.origami.com.br/payslips/202601.pdf',
+    },
+    {
+      id: 'pay-202602', month: 2, year: 2026, grossSalary: 12500.00, netSalary: 9875.50,
+      deductions: [
+        { description: 'INSS', amount: 1051.20 },
+        { description: 'IRRF', amount: 1318.30 },
+        { description: 'Plano de Saúde', amount: 255.00 },
+      ],
+      benefits: [
+        { description: 'Vale Refeição', amount: 600.00 },
+        { description: 'Vale Transporte', amount: 400.00 },
+      ],
+      pdfUrl: 'https://mock.origami.com.br/payslips/202602.pdf',
+    },
+    {
+      id: 'pay-202603', month: 3, year: 2026, grossSalary: 12500.00, netSalary: 9875.50,
+      deductions: [
+        { description: 'INSS', amount: 1051.20 },
+        { description: 'IRRF', amount: 1318.30 },
+        { description: 'Plano de Saúde', amount: 255.00 },
+      ],
+      benefits: [
+        { description: 'Vale Refeição', amount: 600.00 },
+        { description: 'Vale Transporte', amount: 400.00 },
+      ],
+      pdfUrl: 'https://mock.origami.com.br/payslips/202603.pdf',
+    },
+  ]
+}
+
+// ─── HR Events (5) ──────────────────────────────────────────────────────────
+export function buildSeedHrEvents() {
+  return [
+    { id: 'hre-001', title: 'Treinamento Compliance', description: 'Treinamento obrigatório sobre LGPD e compliance corporativo', date: '2026-03-25', type: 'training', attendees: ['1', '2', '3', '7'] },
+    { id: 'hre-002', title: 'Happy Hour de Aniversariantes', description: 'Celebração dos aniversariantes de março', date: '2026-03-28', type: 'celebration', attendees: ['1', '2', '5', '8', '11'] },
+    { id: 'hre-003', title: 'Town Hall Q1 2026', description: 'Apresentação de resultados do primeiro trimestre', date: '2026-03-30', type: 'meeting', attendees: ['1', '2', '3', '4', '5', '6', '7', '8'] },
+    { id: 'hre-004', title: 'Workshop de Saúde Mental', description: 'Sessão de mindfulness e bem-estar com psicóloga corporativa', date: '2026-03-22', type: 'wellness', attendees: ['1', '5', '7', '9'] },
+    { id: 'hre-005', title: 'Feira de Benefícios 2026', description: 'Parceiros apresentam novos benefícios disponíveis', date: '2026-04-05', type: 'fair', attendees: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'] },
+  ]
+}
+
+// ─── Clock Locks (3) ────────────────────────────────────────────────────────
+export function buildSeedClockLocks() {
+  return [
+    { id: 'lock-001', name: 'Escritório Origami', type: 'geofence', active: true, range: '100m — Av. Paulista, 1000' },
+    { id: 'lock-002', name: 'Beacon Recepção', type: 'beacon', active: true, range: 'UUID: 2F234454-CF6D-4A0F-ADF2' },
+    { id: 'lock-003', name: 'WiFi Corporativo', type: 'wifi', active: false, range: 'SSID: Origami-Corp-5G' },
+  ]
+}
+
+// ─── Loans (2) ──────────────────────────────────────────────────────────────
+export function buildSeedLoans() {
+  return [
+    {
+      id: 'loan-001', type: 'consignado', originalAmount: 15000.00, remainingBalance: 11250.00,
+      installmentsPaid: 6, installmentsTotal: 24, monthlyPayment: 750.00,
+      nextPaymentDate: '2026-04-05', status: 'active',
+    },
+    {
+      id: 'loan-002', type: 'antecipacao_13', originalAmount: 6250.00, remainingBalance: 3125.00,
+      installmentsPaid: 3, installmentsTotal: 6, monthlyPayment: 1100.00,
+      nextPaymentDate: '2026-04-10', status: 'active',
+    },
+  ]
+}
+
+// ─── Travel Requests (3) ────────────────────────────────────────────────────
+export function buildSeedTravels() {
+  return [
+    { id: 'trv-001', destination: 'São Paulo → Rio de Janeiro', startDate: '2026-04-10', endDate: '2026-04-12', purpose: 'Reunião com cliente Petrobras', status: 'approved', totalBudget: 3500.00 },
+    { id: 'trv-002', destination: 'São Paulo → Curitiba', startDate: '2026-05-05', endDate: '2026-05-07', purpose: 'Workshop de integração regional', status: 'pending', totalBudget: 2800.00 },
+    { id: 'trv-003', destination: 'São Paulo → Recife', startDate: '2026-02-15', endDate: '2026-02-18', purpose: 'Conferência NordesteTech 2026', status: 'completed', totalBudget: 4200.00 },
+  ]
+}
+
+// ─── Travel Policy ──────────────────────────────────────────────────────────
+export function buildSeedTravelPolicy() {
+  return {
+    maxDailyMeal: 120.00,
+    maxHotelNight: 450.00,
+    requiresPreApproval: true,
+    advanceDays: 7,
+  }
+}
+
 // ─── Static data (banners, FAQs, external benefits, rewards, sessions, security) ─
 export { BANNERS, FAQS, EXTERNAL_BENEFITS, REWARDS_SUMMARY, SP_TRANS_CARDS } from './data/static.js'
 export { SENSITIVE_DATA } from './data/cards.js'

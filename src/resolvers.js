@@ -1,3 +1,4 @@
+import { GraphQLError } from 'graphql'
 import { makeToken, getUserIdFromRequest } from './auth.js'
 import {
   nextId, logMutation,
@@ -34,7 +35,24 @@ import {
   trackLogin, trackLogout,
   updateUserPassword, resetFailedAttempts,
   shouldSimulateFailure,
+  // HR
+  getClockEntries, getHourBank, getVacationBalance, getVacationHistory,
+  getPayslips, getHrEvents, getClockLocks,
+  addClockEntry, addVacationPeriod,
+  // Credit
+  getLoans, getLoanById,
+  // Travel
+  getTravels, getTravelById, getTravelPolicy,
+  addTravel, updateTravelStatus, removeTravel,
+  // Rate limiting & daily totals
+  trackFailedAttempt, isRateLimited, clearFailedAttempts,
+  getDailyTotal, addToDailyTotal, getDailyLimit,
 } from './state.js'
+
+// ── GraphQL Error helper ─────────────────────────────────────────────────────
+function gqlError(message, code, status) {
+  return new GraphQLError(message, { extensions: { code, http: { status } } })
+}
 
 // ── Flow token state ──────────────────────────────────────────────────────────
 const _flowTokens = new Map()
@@ -49,6 +67,15 @@ const VALID_2FA_CODE    = '654321'
 // ─── Helper: extrai userId do contexto da request ────────────────────────────
 function uid(context) {
   return getUserIdFromRequest(context.request)
+}
+
+// ─── Helper: verifica autenticação (Bearer token) ────────────────────────────
+function requireAuth(context) {
+  const auth = context.request.headers.get('authorization') ?? ''
+  if (!auth || !auth.startsWith('Bearer ')) {
+    throw gqlError('Autenticação necessária. Envie um Bearer token válido.', 'UNAUTHENTICATED', 401)
+  }
+  return uid(context)
 }
 
 // ─── Helper: monta Transaction mock ──────────────────────────────────────────
@@ -67,8 +94,72 @@ function makeTx(prefix, descricao, amount, walletId = 'w1', categoria = 'Pagamen
   }
 }
 
+// ─── Helper: full transaction fields (receipt) ───────────────────────────────
+function fullTx(tx) {
+  return {
+    ...tx,
+    direcao: 'debito',
+    estabelecimento: tx.merchant,
+    walletTipo: null,
+    nsu: null, codigoAutorizacao: null, cnpjEstabelecimento: null,
+    enderecoEstabelecimento: null, cartaoFinal: null, bandeira: null,
+    mcc: null, mccDescricao: null, parcelas: null, valorParcela: null, nomePortador: null,
+  }
+}
+
 // ─── Helper: resultado de sucesso ────────────────────────────────────────────
 const ok = (extra = {}) => ({ success: true, message: null, ...extra })
+
+// ─── Helper: validate wallet transaction ─────────────────────────────────────
+function validateWalletTransaction(userId, walletId, amount, operationName) {
+  if (amount == null || amount <= 0) {
+    throw gqlError(`Valor inválido para ${operationName}. O valor deve ser maior que zero.`, 'BAD_REQUEST', 400)
+  }
+  if (!walletId) {
+    throw gqlError(`walletId é obrigatório para ${operationName}.`, 'BAD_REQUEST', 400)
+  }
+  const wallet = findWallet(userId, walletId)
+  if (!wallet) {
+    throw gqlError(`Carteira '${walletId}' não encontrada.`, 'NOT_FOUND', 404)
+  }
+  if (amount > wallet.saldo) {
+    throw gqlError(
+      `Saldo insuficiente na carteira '${wallet.nome}'. Saldo: R$${wallet.saldo.toFixed(2)}, Valor: R$${amount.toFixed(2)}.`,
+      'INSUFFICIENT_BALANCE', 422
+    )
+  }
+  // Check daily limit
+  const currentDaily = getDailyTotal(userId)
+  if (currentDaily + amount > getDailyLimit()) {
+    throw gqlError(
+      `Limite diário excedido. Limite: R$${getDailyLimit().toFixed(2)}, Já utilizado: R$${currentDaily.toFixed(2)}, Tentativa: R$${amount.toFixed(2)}.`,
+      'DAILY_LIMIT_EXCEEDED', 422
+    )
+  }
+  return wallet
+}
+
+// ─── Helper: validate card exists ────────────────────────────────────────────
+function requireCard(userId, cardId) {
+  const cards = getCards(userId)
+  const card = cards.find(c => c.id === cardId)
+  if (!card) {
+    throw gqlError(`Cartão '${cardId}' não encontrado.`, 'NOT_FOUND', 404)
+  }
+  return card
+}
+
+// ─── Helper: check weak PIN ──────────────────────────────────────────────────
+function validatePin(pin) {
+  const weak = ['0000', '1234', '4321', '1111', '2222', '3333', '4444', '5555', '6666', '7777', '8888', '9999']
+  if (weak.includes(pin)) {
+    throw gqlError('PIN fraco. Não use sequências simples ou dígitos repetidos.', 'WEAK_PIN', 422)
+  }
+  // All same digits check
+  if (pin.length >= 4 && new Set(pin.split('')).size === 1) {
+    throw gqlError('PIN fraco. Não use todos os dígitos iguais.', 'WEAK_PIN', 422)
+  }
+}
 
 export const resolvers = {
   // ══════════════════════════════════════════════════════════════════
@@ -286,6 +377,79 @@ export const resolvers = {
 
     // ── Geofencing ────────────────────────────────────────────────
     geofenceZones: () => getGeofenceZones(),
+
+    // ── HR ──────────────────────────────────────────────────────
+    timeSheet: (_, { date }) => {
+      const entries = getClockEntries().filter(e => e.timestamp.startsWith(date))
+      return {
+        date,
+        entries,
+        workedMinutes: 480,
+        extraMinutes: 30,
+        nightMinutes: 0,
+        breakMinutes: 64,
+      }
+    },
+
+    hourBank: () => getHourBank(),
+
+    vacationBalance: () => getVacationBalance(),
+
+    vacationHistory: () => getVacationHistory(),
+
+    payslips: (_, { year }) => getPayslips().filter(p => p.year === year),
+
+    hrEvents: (_, { month, year }) => {
+      return getHrEvents().filter(e => {
+        const d = new Date(e.date)
+        return d.getMonth() + 1 === month && d.getFullYear() === year
+      })
+    },
+
+    clockLocks: () => getClockLocks(),
+
+    // ── Credit ─────────────────────────────────────────────────
+    loans: () => getLoans(),
+
+    loanDetail: (_, { id }) => {
+      const loan = getLoanById(id)
+      if (!loan) throw gqlError(`Empréstimo '${id}' não encontrado.`, 'NOT_FOUND', 404)
+      return loan
+    },
+
+    creditSimulation: (_, { amount, installments, type }) => {
+      if (amount < 500) {
+        throw gqlError('Valor mínimo para simulação é R$500,00.', 'BAD_REQUEST', 400)
+      }
+      if (amount > 50000) {
+        throw gqlError('Valor máximo para simulação é R$50.000,00.', 'BAD_REQUEST', 400)
+      }
+      const interestRate = 0.018 // 1.8% monthly
+      const monthlyPayment = parseFloat((amount * interestRate / (1 - Math.pow(1 + interestRate, -installments))).toFixed(2))
+      const totalCost = parseFloat((monthlyPayment * installments).toFixed(2))
+      const iofTax = parseFloat((amount * 0.0038 + amount * 0.000082 * Math.min(installments * 30, 365)).toFixed(2))
+      return {
+        id: nextId('sim'),
+        type,
+        amount,
+        installments,
+        monthlyPayment,
+        interestRate,
+        totalCost,
+        iofTax,
+      }
+    },
+
+    // ── Travel ─────────────────────────────────────────────────
+    travels: () => getTravels(),
+
+    travelDetail: (_, { id }) => {
+      const travel = getTravelById(id)
+      if (!travel) throw gqlError(`Viagem '${id}' não encontrada.`, 'NOT_FOUND', 404)
+      return travel
+    },
+
+    travelPolicy: () => getTravelPolicy(),
   },
 
   // ══════════════════════════════════════════════════════════════════
@@ -296,17 +460,33 @@ export const resolvers = {
     // ── Auth ──────────────────────────────────────────────────────
     login: (_, { input }) => {
       const { cpf, password } = input
+
+      // Rate limit check
+      const rateLimitKey = `login:${cpf}`
+      if (isRateLimited(rateLimitKey)) {
+        logMutation('login', `RATE LIMITED: cpf ${cpf}`)
+        throw gqlError(
+          'Muitas tentativas de login. Conta temporariamente bloqueada por 15 minutos.',
+          'RATE_LIMITED', 429
+        )
+      }
+
       const user = findUserByCpf(cpf)
       if (!user) {
         logMutation('login', `FAILED: cpf ${cpf} not found`)
-        return null
+        trackFailedAttempt(rateLimitKey)
+        throw gqlError('CPF não encontrado.', 'NOT_FOUND', 404)
       }
       if (user.bloqueioDefinitivo) {
         logMutation('login', `FAILED: user:${user.id} blocked permanently`)
-        return null
+        throw gqlError(
+          'Conta bloqueada definitivamente. Entre em contato com o suporte.',
+          'FORBIDDEN', 403
+        )
       }
       if (user.senha === null) {
         trackLogin(user.id)
+        clearFailedAttempts(rateLimitKey)
         logMutation('login', `user:${user.id} | first-access`)
         return {
           accessToken: `origami-mock-${user.id}-first-access`,
@@ -322,11 +502,13 @@ export const resolvers = {
       // Simulate password validation (in production this would be bcrypt/argon2)
       const passwordValid = password === user.senha // Mock: plaintext comparison
       if (!passwordValid) {
-        logMutation('login', `FAILED: wrong password for cpf ${cpf} (user:${user.id})`)
-        return null
+        const attempt = trackFailedAttempt(rateLimitKey)
+        logMutation('login', `FAILED: wrong password for cpf ${cpf} (user:${user.id}) attempt:${attempt.count}`)
+        throw gqlError('Senha incorreta.', 'UNAUTHORIZED', 401)
       }
       trackLogin(user.id)
       resetFailedAttempts(user.id)
+      clearFailedAttempts(rateLimitKey)
       logMutation('login', `user:${user.id} | success`)
       return {
         accessToken: makeToken(user.id),
@@ -341,7 +523,7 @@ export const resolvers = {
     },
 
     logout: (_, { sessionId } = {}, context) => {
-      const userId = uid(context)
+      const userId = requireAuth(context)
       trackLogout(userId)
       logMutation('logout', `user:${userId}`)
       return ok()
@@ -349,32 +531,56 @@ export const resolvers = {
 
     forgotPassword: (_, { cpf }) => {
       const user = findUserByCpf(cpf)
-      return user ? ok() : { success: false, message: 'CPF não encontrado' }
-    },
-
-    verifyOtp: (_, { otp }) => {
-      if (otp === '0000') return { success: false, message: 'Código inválido', resetTicket: null }
-      return { success: true, message: null, resetTicket: `mock-reset-ticket-${Date.now()}` }
-    },
-
-    resetPassword: (_, { input: { resetTicket, newPassword } }) => {
-      if (resetTicket.length > 0 && newPassword.length >= 8) {
-        logMutation('resetPassword', `ticket:${resetTicket.slice(0, 20)}...`)
-        return ok()
-      }
-      return { success: false, message: 'Dados inválidos' }
-    },
-
-    updatePassword: (_, { input }) => {
-      if (input) {
-        updateUserPassword(input.cpf, input.newPassword)
-        logMutation('updatePassword', `cpf:${input.cpf}`)
+      if (!user) {
+        throw gqlError('CPF não encontrado.', 'NOT_FOUND', 404)
       }
       return ok()
     },
 
-    validateCode: (_, { code }) =>
-      code === VALID_OTP_CODE ? ok() : { success: false, message: 'Código inválido' },
+    verifyOtp: (_, { otp }) => {
+      const rateLimitKey = `otp:${otp}`
+      if (isRateLimited(rateLimitKey)) {
+        throw gqlError(
+          'Muitas tentativas de verificação. Aguarde 15 minutos.',
+          'RATE_LIMITED', 429
+        )
+      }
+      if (otp === '0000' || otp !== VALID_OTP_CODE) {
+        trackFailedAttempt(rateLimitKey)
+        throw gqlError('Código OTP inválido.', 'UNAUTHORIZED', 401)
+      }
+      clearFailedAttempts(rateLimitKey)
+      return { success: true, message: null, resetTicket: `mock-reset-ticket-${Date.now()}` }
+    },
+
+    resetPassword: (_, { input: { resetTicket, newPassword } }) => {
+      if (!resetTicket || resetTicket.length === 0) {
+        throw gqlError('Reset ticket é obrigatório.', 'BAD_REQUEST', 400)
+      }
+      if (!newPassword || newPassword.length < 8) {
+        throw gqlError('A nova senha deve ter no mínimo 8 caracteres.', 'BAD_REQUEST', 400)
+      }
+      logMutation('resetPassword', `ticket:${resetTicket.slice(0, 20)}...`)
+      return ok()
+    },
+
+    updatePassword: (_, { input }, context) => {
+      requireAuth(context)
+      if (!input || !input.cpf || !input.newPassword) {
+        throw gqlError('CPF e nova senha são obrigatórios.', 'BAD_REQUEST', 400)
+      }
+      if (input.newPassword.length < 8) {
+        throw gqlError('A nova senha deve ter no mínimo 8 caracteres.', 'BAD_REQUEST', 400)
+      }
+      updateUserPassword(input.cpf, input.newPassword)
+      logMutation('updatePassword', `cpf:${input.cpf}`)
+      return ok()
+    },
+
+    validateCode: (_, { code }) => {
+      if (code === VALID_OTP_CODE) return ok()
+      throw gqlError('Código inválido.', 'UNAUTHORIZED', 401)
+    },
 
     validateDeviceToken: (_, { token }) => ({
       success: token === VALID_DEVICE_TOKEN,
@@ -382,75 +588,165 @@ export const resolvers = {
       deviceTrusted: token === VALID_DEVICE_TOKEN,
     }),
 
-    terminateSession: () => ok(),
-    setTransactionPin: () => ok(),
-    validateTransactionPin: (_, { pin }) =>
-      pin === VALID_TX_PIN ? ok() : { success: false, message: 'PIN incorreto' },
-    toggle2FA: () => ok(),
-    verify2FACode: (_, { code }) =>
-      code === VALID_2FA_CODE ? ok() : { success: false, message: 'Código 2FA inválido' },
-    requestDataDeletion: () => ({ success: true, message: null, protocol: `DEL-${Date.now()}` }),
-    validatePhone: (_, { phone }) =>
-      phone.replace(/\D/g, '').length >= 10 ? ok() : { success: false, message: 'Telefone inválido' },
-    recoverTransactionPin: () => ok(),
-    updateTransactionPin: (_, { recoveryCode, newPin }) =>
-      recoveryCode === VALID_OTP_CODE && newPin.length >= 4 ? ok() : { success: false, message: 'Dados inválidos' },
+    terminateSession: (_, __, context) => {
+      requireAuth(context)
+      return ok()
+    },
+
+    setTransactionPin: (_, __, context) => {
+      requireAuth(context)
+      return ok()
+    },
+
+    validateTransactionPin: (_, { pin }, context) => {
+      requireAuth(context)
+      const rateLimitKey = `txpin:${uid(context)}`
+      if (isRateLimited(rateLimitKey)) {
+        throw gqlError(
+          'Muitas tentativas de PIN. Aguarde 15 minutos.',
+          'RATE_LIMITED', 429
+        )
+      }
+      if (pin !== VALID_TX_PIN) {
+        trackFailedAttempt(rateLimitKey)
+        throw gqlError('PIN de transação incorreto.', 'UNAUTHORIZED', 401)
+      }
+      clearFailedAttempts(rateLimitKey)
+      return ok()
+    },
+
+    toggle2FA: (_, __, context) => {
+      requireAuth(context)
+      return ok()
+    },
+
+    verify2FACode: (_, { code }, context) => {
+      requireAuth(context)
+      if (code !== VALID_2FA_CODE) {
+        throw gqlError('Código 2FA inválido.', 'UNAUTHORIZED', 401)
+      }
+      return ok()
+    },
+
+    requestDataDeletion: (_, __, context) => {
+      requireAuth(context)
+      return { success: true, message: null, protocol: `DEL-${Date.now()}` }
+    },
+
+    validatePhone: (_, { phone }) => {
+      if (phone.replace(/\D/g, '').length < 10) {
+        throw gqlError('Telefone inválido. Mínimo 10 dígitos.', 'BAD_REQUEST', 400)
+      }
+      return ok()
+    },
+
+    recoverTransactionPin: (_, __, context) => {
+      requireAuth(context)
+      return ok()
+    },
+
+    updateTransactionPin: (_, { recoveryCode, newPin }, context) => {
+      requireAuth(context)
+      if (recoveryCode !== VALID_OTP_CODE) {
+        throw gqlError('Código de recuperação inválido.', 'UNAUTHORIZED', 401)
+      }
+      if (!newPin || newPin.length < 4) {
+        throw gqlError('O novo PIN deve ter no mínimo 4 dígitos.', 'BAD_REQUEST', 400)
+      }
+      return ok()
+    },
 
     // ── Wallet ────────────────────────────────────────────────────
     pixTransfer: (_, { input }, context) => {
-      const userId = uid(context)
+      const userId = requireAuth(context)
       if (shouldSimulateFailure()) {
         logMutation('pixTransfer', `user:${userId} | SIMULATED FAILURE`)
-        return null
+        throw gqlError('Falha simulada no servidor.', 'INTERNAL_ERROR', 500)
       }
+      if (!input.chavePix) {
+        throw gqlError('Chave PIX é obrigatória.', 'BAD_REQUEST', 400)
+      }
+      validateWalletTransaction(userId, input.walletId, input.amount, 'PIX')
       const wallet = deductWallet(userId, input.walletId, input.amount)
+      addToDailyTotal(userId, input.amount)
       const tx = makeTx('pix', `PIX para ${input.chavePix}`, input.amount, input.walletId, 'PIX')
       addTransaction(userId, tx)
       logMutation('pixTransfer', `user:${userId} | wallet:${input.walletId} -R$${input.amount} → R$${wallet?.saldo ?? '?'}`)
-      return { ...tx, direcao: 'debito', estabelecimento: tx.merchant, walletTipo: null, nsu: null, codigoAutorizacao: null, cnpjEstabelecimento: null, enderecoEstabelecimento: null, cartaoFinal: null, bandeira: null, mcc: null, mccDescricao: null, parcelas: null, valorParcela: null, nomePortador: null }
+      return fullTx(tx)
     },
 
     processQrPayment: (_, { input }, context) => {
-      const userId = uid(context)
+      const userId = requireAuth(context)
       if (shouldSimulateFailure()) {
         logMutation('processQrPayment', `user:${userId} | SIMULATED FAILURE`)
-        return null
+        throw gqlError('Falha simulada no servidor.', 'INTERNAL_ERROR', 500)
       }
+      if (!input.qrCode) {
+        throw gqlError('QR Code é obrigatório.', 'BAD_REQUEST', 400)
+      }
+      validateWalletTransaction(userId, input.walletId, input.amount, 'QR Payment')
       const wallet = deductWallet(userId, input.walletId, input.amount)
+      addToDailyTotal(userId, input.amount)
       const tx = makeTx('qr', 'Pagamento QR Code', input.amount, input.walletId, 'QR Code')
       addTransaction(userId, tx)
       logMutation('processQrPayment', `user:${userId} | wallet:${input.walletId} -R$${input.amount} → R$${wallet?.saldo ?? '?'}`)
-      return { ...tx, direcao: 'debito', estabelecimento: tx.merchant, walletTipo: null, nsu: null, codigoAutorizacao: null, cnpjEstabelecimento: null, enderecoEstabelecimento: null, cartaoFinal: null, bandeira: null, mcc: null, mccDescricao: null, parcelas: null, valorParcela: null, nomePortador: null }
+      return fullTx(tx)
     },
 
     payBoleto: (_, { input }, context) => {
-      const userId = uid(context)
+      const userId = requireAuth(context)
       if (shouldSimulateFailure()) {
         logMutation('payBoleto', `user:${userId} | SIMULATED FAILURE`)
-        return null
+        throw gqlError('Falha simulada no servidor.', 'INTERNAL_ERROR', 500)
       }
+      if (!input.barCode) {
+        throw gqlError('Código de barras do boleto é obrigatório.', 'BAD_REQUEST', 400)
+      }
+      validateWalletTransaction(userId, input.walletId, input.amount, 'Boleto')
       const wallet = deductWallet(userId, input.walletId, input.amount)
+      addToDailyTotal(userId, input.amount)
       const tx = makeTx('bol', 'Pagamento de Boleto', input.amount, input.walletId, 'Boleto')
       addTransaction(userId, tx)
       logMutation('payBoleto', `user:${userId} | wallet:${input.walletId} -R$${input.amount} → R$${wallet?.saldo ?? '?'}`)
-      return { ...tx, direcao: 'debito', estabelecimento: tx.merchant, walletTipo: null, nsu: null, codigoAutorizacao: null, cnpjEstabelecimento: null, enderecoEstabelecimento: null, cartaoFinal: null, bandeira: null, mcc: null, mccDescricao: null, parcelas: null, valorParcela: null, nomePortador: null }
+      return fullTx(tx)
     },
 
     mobileRecharge: (_, { input }, context) => {
-      const userId = uid(context)
+      const userId = requireAuth(context)
       if (shouldSimulateFailure()) {
         logMutation('mobileRecharge', `user:${userId} | SIMULATED FAILURE`)
-        return null
+        throw gqlError('Falha simulada no servidor.', 'INTERNAL_ERROR', 500)
       }
+      if (!input.phone) {
+        throw gqlError('Número do telefone é obrigatório.', 'BAD_REQUEST', 400)
+      }
+      validateWalletTransaction(userId, input.walletId, input.amount, 'Recarga')
       const wallet = deductWallet(userId, input.walletId, input.amount)
+      addToDailyTotal(userId, input.amount)
       const tx = makeTx('rec', `Recarga ${input.phone}`, input.amount, input.walletId, 'Recarga')
       addTransaction(userId, tx)
       logMutation('mobileRecharge', `user:${userId} | wallet:${input.walletId} -R$${input.amount} → R$${wallet?.saldo ?? '?'}`)
-      return { ...tx, direcao: 'debito', estabelecimento: tx.merchant, walletTipo: null, nsu: null, codigoAutorizacao: null, cnpjEstabelecimento: null, enderecoEstabelecimento: null, cartaoFinal: null, bandeira: null, mcc: null, mccDescricao: null, parcelas: null, valorParcela: null, nomePortador: null }
+      return fullTx(tx)
     },
 
     reallocateBenefit: (_, { input }, context) => {
-      const userId = uid(context)
+      const userId = requireAuth(context)
+      if (!input.amount || input.amount <= 0) {
+        throw gqlError('Valor deve ser maior que zero.', 'BAD_REQUEST', 400)
+      }
+      if (!input.fromWalletId || !input.toWalletId) {
+        throw gqlError('Carteiras de origem e destino são obrigatórias.', 'BAD_REQUEST', 400)
+      }
+      const fromWallet = findWallet(userId, input.fromWalletId)
+      if (!fromWallet) throw gqlError(`Carteira de origem '${input.fromWalletId}' não encontrada.`, 'NOT_FOUND', 404)
+      const toWallet = findWallet(userId, input.toWalletId)
+      if (!toWallet) throw gqlError(`Carteira de destino '${input.toWalletId}' não encontrada.`, 'NOT_FOUND', 404)
+      if (input.amount > fromWallet.saldo) {
+        throw gqlError(
+          `Saldo insuficiente na carteira '${fromWallet.nome}'. Saldo: R$${fromWallet.saldo.toFixed(2)}.`,
+          'INSUFFICIENT_BALANCE', 422
+        )
+      }
       const from = deductWallet(userId, input.fromWalletId, input.amount)
       const to = creditWallet(userId, input.toWalletId, input.amount)
       logMutation('reallocateBenefit', `user:${userId} | ${input.fromWalletId} -R$${input.amount} → ${input.toWalletId} +R$${input.amount} | from:R$${from?.saldo ?? '?'} to:R$${to?.saldo ?? '?'}`)
@@ -458,90 +754,142 @@ export const resolvers = {
     },
 
     scheduleDeposit: (_, { input }, context) => {
-      const userId = uid(context)
+      const userId = requireAuth(context)
+      if (!input.amount || input.amount <= 0) {
+        throw gqlError('Valor deve ser maior que zero.', 'BAD_REQUEST', 400)
+      }
+      if (!input.walletId) {
+        throw gqlError('walletId é obrigatório.', 'BAD_REQUEST', 400)
+      }
+      if (!input.scheduledDate) {
+        throw gqlError('Data agendada é obrigatória.', 'BAD_REQUEST', 400)
+      }
+      const wallet = findWallet(userId, input.walletId)
+      if (!wallet) throw gqlError(`Carteira '${input.walletId}' não encontrada.`, 'NOT_FOUND', 404)
       addScheduledDeposit(userId, input.walletId, input.amount, input.scheduledDate)
       logMutation('scheduleDeposit', `user:${userId} | wallet:${input.walletId} R$${input.amount} on ${input.scheduledDate}`)
       return true
     },
 
     updateWalletLimit: (_, { input }, context) => {
-      const userId = uid(context)
+      const userId = requireAuth(context)
+      if (input.newLimit == null || input.newLimit < 0) {
+        throw gqlError('O novo limite deve ser um valor positivo.', 'BAD_REQUEST', 400)
+      }
+      if (!input.walletId) {
+        throw gqlError('walletId é obrigatório.', 'BAD_REQUEST', 400)
+      }
+      const existing = findWallet(userId, input.walletId)
+      if (!existing) throw gqlError(`Carteira '${input.walletId}' não encontrada.`, 'NOT_FOUND', 404)
       const wallet = updateWalletLimit(userId, input.walletId, input.newLimit)
       logMutation('updateWalletLimit', `user:${userId} | wallet:${input.walletId} → limit:R$${input.newLimit}`)
       return wallet ? { ...wallet } : null
     },
 
     reclassifyTransaction: (_, { input }, context) => {
-      const userId = uid(context)
-      const ok = reclassifyTransaction(userId, input.transactionId, input.newCategory)
+      const userId = requireAuth(context)
+      if (!input.transactionId || !input.newCategory) {
+        throw gqlError('transactionId e newCategory são obrigatórios.', 'BAD_REQUEST', 400)
+      }
+      const result = reclassifyTransaction(userId, input.transactionId, input.newCategory)
+      if (!result) {
+        throw gqlError(`Transação '${input.transactionId}' não encontrada.`, 'NOT_FOUND', 404)
+      }
       logMutation('reclassifyTransaction', `user:${userId} | tx:${input.transactionId} → ${input.newCategory}`)
-      return ok
+      return result
     },
 
     cashOut: (_, { input }, context) => {
-      const userId = uid(context)
+      const userId = requireAuth(context)
       if (shouldSimulateFailure()) {
         logMutation('cashOut', `user:${userId} | SIMULATED FAILURE`)
-        return null
+        throw gqlError('Falha simulada no servidor.', 'INTERNAL_ERROR', 500)
       }
+      validateWalletTransaction(userId, input.walletId, input.amount, 'Saque')
       const wallet = deductWallet(userId, input.walletId, input.amount)
+      addToDailyTotal(userId, input.amount)
       const tx = makeTx('cashout', 'Saque bancário', input.amount, input.walletId, 'Saque')
       addTransaction(userId, tx)
       logMutation('cashOut', `user:${userId} | wallet:${input.walletId} -R$${input.amount} → R$${wallet?.saldo ?? '?'}`)
-      return { ...tx, direcao: 'debito', estabelecimento: tx.merchant, walletTipo: null, nsu: null, codigoAutorizacao: null, cnpjEstabelecimento: null, enderecoEstabelecimento: null, cartaoFinal: null, bandeira: null, mcc: null, mccDescricao: null, parcelas: null, valorParcela: null, nomePortador: null }
+      return fullTx(tx)
     },
 
-    pixCashOutPreview: (_, { input }) => ({
-      chavePix: input.chavePix,
-      tipoChave: input.tipoChave,
-      nomeTitular: 'Lucas Oliveira Silva',
-      banco: 'Origami Bank',
-      agencia: '0001',
-      conta: '12345-6',
-      amount: input.amount,
-      fee: parseFloat((input.amount * 0.015).toFixed(2)),
-      totalDebited: parseFloat((input.amount * 1.015).toFixed(2)),
-      previewId: nextId('preview'),
-    }),
+    pixCashOutPreview: (_, { input }, context) => {
+      requireAuth(context)
+      if (!input.chavePix) {
+        throw gqlError('Chave PIX é obrigatória.', 'BAD_REQUEST', 400)
+      }
+      if (!input.amount || input.amount <= 0) {
+        throw gqlError('Valor deve ser maior que zero.', 'BAD_REQUEST', 400)
+      }
+      return {
+        chavePix: input.chavePix,
+        tipoChave: input.tipoChave,
+        nomeTitular: 'Lucas Oliveira Silva',
+        banco: 'Origami Bank',
+        agencia: '0001',
+        conta: '12345-6',
+        amount: input.amount,
+        fee: parseFloat((input.amount * 0.015).toFixed(2)),
+        totalDebited: parseFloat((input.amount * 1.015).toFixed(2)),
+        previewId: nextId('preview'),
+      }
+    },
 
     executePixCashOut: (_, { input }, context) => {
-      const userId = uid(context)
+      const userId = requireAuth(context)
       if (shouldSimulateFailure()) {
         logMutation('executePixCashOut', `user:${userId} | SIMULATED FAILURE`)
-        return null
+        throw gqlError('Falha simulada no servidor.', 'INTERNAL_ERROR', 500)
+      }
+      if (!input.amount || input.amount <= 0) {
+        throw gqlError('Valor deve ser maior que zero.', 'BAD_REQUEST', 400)
       }
       const totalDebited = parseFloat((input.amount * 1.015).toFixed(2))
+      validateWalletTransaction(userId, input.walletId, totalDebited, 'PIX Cash Out')
       const wallet = deductWallet(userId, input.walletId, totalDebited)
+      addToDailyTotal(userId, totalDebited)
       const tx = makeTx('cashout', `PIX Cash Out para ${input.chavePix}`, input.amount, input.walletId, 'PIX Cash Out')
       addTransaction(userId, tx)
       logMutation('executePixCashOut', `user:${userId} | wallet:${input.walletId} -R$${totalDebited} (fee incl.) → R$${wallet?.saldo ?? '?'}`)
-      return { ...tx, direcao: 'debito', estabelecimento: tx.merchant, walletTipo: null, nsu: null, codigoAutorizacao: null, cnpjEstabelecimento: null, enderecoEstabelecimento: null, cartaoFinal: null, bandeira: null, mcc: null, mccDescricao: null, parcelas: null, valorParcela: null, nomePortador: null }
+      return fullTx(tx)
     },
 
-    statementExport: (_, { input }) => ({
-      url: `https://mock.origami.com.br/statements/extrato.${input.format.toLowerCase()}`,
-      format: input.format,
-    }),
+    statementExport: (_, { input }, context) => {
+      requireAuth(context)
+      return {
+        url: `https://mock.origami.com.br/statements/extrato.${input.format.toLowerCase()}`,
+        format: input.format,
+      }
+    },
 
     // ── Cards ─────────────────────────────────────────────────────
     blockCard: (_, { id: cardId }, context) => {
-      const userId = uid(context)
-      const card = setCardStatus(userId, cardId, 'bloqueado')
+      const userId = requireAuth(context)
+      const card = requireCard(userId, cardId)
+      if (card.status === 'bloqueado') {
+        throw gqlError('Cartão já está bloqueado.', 'CONFLICT', 409)
+      }
+      setCardStatus(userId, cardId, 'bloqueado')
       logMutation('blockCard', `user:${userId} | card:${cardId} → bloqueado`)
-      const { pin, ...safe } = card || getCardById(userId, cardId)
+      const { pin, ...safe } = card
       return { ...safe, status: 'bloqueado' }
     },
 
     unblockCard: (_, { id: cardId }, context) => {
-      const userId = uid(context)
-      const card = setCardStatus(userId, cardId, 'ativo')
+      const userId = requireAuth(context)
+      const card = requireCard(userId, cardId)
+      if (card.status === 'ativo') {
+        throw gqlError('Cartão já está ativo.', 'CONFLICT', 409)
+      }
+      setCardStatus(userId, cardId, 'ativo')
       logMutation('unblockCard', `user:${userId} | card:${cardId} → ativo`)
-      const { pin, ...safe } = card || getCardById(userId, cardId)
+      const { pin, ...safe } = card
       return { ...safe, status: 'ativo' }
     },
 
     createVirtualCard: (_, __, context) => {
-      const userId = uid(context)
+      const userId = requireAuth(context)
       const user = findUserById(userId)
       const name = user.nome.split(' ').map((w, i) => i < 2 ? w : w[0]).join(' ').toUpperCase()
       const newCard = {
@@ -563,15 +911,20 @@ export const resolvers = {
     },
 
     activateCard: (_, { id: cardId }, context) => {
-      const userId = uid(context)
-      const card = setCardStatus(userId, cardId, 'ativo')
+      const userId = requireAuth(context)
+      const card = requireCard(userId, cardId)
+      if (card.status === 'ativo') {
+        throw gqlError('Cartão já está ativo.', 'CONFLICT', 409)
+      }
+      setCardStatus(userId, cardId, 'ativo')
       logMutation('activateCard', `user:${userId} | card:${cardId} → ativo`)
-      const { pin, ...safe } = card || getCardById(userId, cardId)
+      const { pin, ...safe } = card
       return { ...safe, status: 'ativo' }
     },
 
     validateCardPin: (_, { id, pin }, context) => {
-      const userId = uid(context)
+      const userId = requireAuth(context)
+      requireCard(userId, id)
       const storedPin = getCardPin(userId, id)
       if (storedPin === null) {
         return { success: false, message: 'Este cartão não possui PIN definido' }
@@ -583,17 +936,20 @@ export const resolvers = {
     },
 
     changeCardPin: (_, { id, newPin }, context) => {
-      if (['0000', '1234', '4321'].includes(newPin)) {
-        return { success: false, message: 'PIN inválido. Escolha outro.' }
-      }
-      const userId = uid(context)
+      const userId = requireAuth(context)
+      requireCard(userId, id)
+      validatePin(newPin)
       setCardPin(userId, id, newPin)
       logMutation('changeCardPin', `user:${userId} | card:${id} → PIN changed`)
       return ok()
     },
 
     requestCardReplacement: (_, { id, reason }, context) => {
-      const userId = uid(context)
+      const userId = requireAuth(context)
+      requireCard(userId, id)
+      if (!reason) {
+        throw gqlError('Motivo da substituição é obrigatório.', 'BAD_REQUEST', 400)
+      }
       addCardReplacement(id, reason)
       setCardStatus(userId, id, 'substituicao_solicitada')
       const protocol = `REP-${Date.now().toString().slice(-6)}`
@@ -601,25 +957,28 @@ export const resolvers = {
       return { success: true, message: protocol }
     },
 
-    toggleInternationalMode: () => true,
+    toggleInternationalMode: (_, __, context) => {
+      requireAuth(context)
+      return true
+    },
 
     // ── Notifications ─────────────────────────────────────────────
     markNotificationRead: (_, { id }, context) => {
-      const userId = uid(context)
+      const userId = requireAuth(context)
       markNotifRead(userId, id)
       logMutation('markNotificationRead', `user:${userId} | notif:${id} → lida=true`)
       return ok()
     },
 
     markAllNotificationsRead: (_, __, context) => {
-      const userId = uid(context)
+      const userId = requireAuth(context)
       markAllNotifsRead(userId)
       logMutation('markAllNotificationsRead', `user:${userId} | all → lida=true`)
       return ok()
     },
 
     updateNotificationPreferences: (_, { input }, context) => {
-      const userId = uid(context)
+      const userId = requireAuth(context)
       setNotifPrefs(userId, input)
       logMutation('updateNotificationPreferences', `user:${userId} | push:${input.pushEnabled} email:${input.emailEnabled} sms:${input.smsEnabled}`)
       return input
@@ -627,14 +986,21 @@ export const resolvers = {
 
     // ── Partners ──────────────────────────────────────────────────
     toggleFavoritePartner: (_, { partnerId: id }, context) => {
-      const userId = uid(context)
+      const userId = requireAuth(context)
       const result = toggleFavorite(userId, id)
       logMutation('toggleFavoritePartner', `user:${userId} | partner:${id} → ${result ? 'added' : 'removed'}`)
       return result
     },
 
     // ── Disputes ──────────────────────────────────────────────────
-    submitDispute: (_, { transactionId, description, amount, merchantName }) => {
+    submitDispute: (_, { transactionId, description, amount, merchantName }, context) => {
+      requireAuth(context)
+      if (!transactionId) {
+        throw gqlError('transactionId é obrigatório.', 'BAD_REQUEST', 400)
+      }
+      if (amount == null || amount <= 0) {
+        throw gqlError('Valor da contestação deve ser maior que zero.', 'BAD_REQUEST', 400)
+      }
       const d = {
         id: nextId('disp'),
         transactionId,
@@ -651,7 +1017,17 @@ export const resolvers = {
     },
 
     // ── Reimbursements ────────────────────────────────────────────
-    submitReimbursement: (_, { category, amount, date, description, receiptUrl }) => {
+    submitReimbursement: (_, { category, amount, date, description, receiptUrl }, context) => {
+      requireAuth(context)
+      if (!category) {
+        throw gqlError('Categoria é obrigatória.', 'BAD_REQUEST', 400)
+      }
+      if (amount == null || amount <= 0) {
+        throw gqlError('Valor do reembolso deve ser maior que zero.', 'BAD_REQUEST', 400)
+      }
+      if (!date) {
+        throw gqlError('Data é obrigatória.', 'BAD_REQUEST', 400)
+      }
       const r = {
         id: nextId('reimb'),
         category, amount, date, description,
@@ -665,7 +1041,14 @@ export const resolvers = {
     },
 
     // ── Balance Requests ──────────────────────────────────────────
-    createBalanceRequest: (_, { input }) => {
+    createBalanceRequest: (_, { input }, context) => {
+      requireAuth(context)
+      if (!input.walletId) {
+        throw gqlError('walletId é obrigatório.', 'BAD_REQUEST', 400)
+      }
+      if (!input.amount || input.amount <= 0) {
+        throw gqlError('Valor deve ser maior que zero.', 'BAD_REQUEST', 400)
+      }
       const r = {
         id: nextId('br'),
         walletId: input.walletId,
@@ -682,82 +1065,140 @@ export const resolvers = {
       return r
     },
 
-    updateBalanceRequest: (_, { input }) => {
+    updateBalanceRequest: (_, { input }, context) => {
+      requireAuth(context)
+      if (!input.requestId || !input.status) {
+        throw gqlError('requestId e status são obrigatórios.', 'BAD_REQUEST', 400)
+      }
       const req = updateBalanceRequestStatus(input.requestId, input.status, input.rejectionReason)
+      if (!req) {
+        throw gqlError(`Solicitação '${input.requestId}' não encontrada.`, 'NOT_FOUND', 404)
+      }
       logMutation('updateBalanceRequest', `br:${input.requestId} → ${input.status}${input.rejectionReason ? ' reason:' + input.rejectionReason : ''}`)
       return req
     },
 
     // ── Digital Wallet ────────────────────────────────────────────
-    addToGooglePay: (_, { cardId }) => {
-      const ok = addToDigitalWallet(cardId, 'google_pay')
-      logMutation('addToGooglePay', `card:${cardId} → ${ok ? 'provisioned' : 'failed'}`)
-      return ok
+    addToGooglePay: (_, { cardId }, context) => {
+      requireAuth(context)
+      const result = addToDigitalWallet(cardId, 'google_pay')
+      if (!result) {
+        throw gqlError(`Cartão '${cardId}' não encontrado.`, 'NOT_FOUND', 404)
+      }
+      logMutation('addToGooglePay', `card:${cardId} → provisioned`)
+      return result
     },
 
-    addToSamsungPay: (_, { cardId }) => {
-      const ok = addToDigitalWallet(cardId, 'samsung_pay')
-      logMutation('addToSamsungPay', `card:${cardId} → ${ok ? 'provisioned' : 'failed'}`)
-      return ok
+    addToSamsungPay: (_, { cardId }, context) => {
+      requireAuth(context)
+      const result = addToDigitalWallet(cardId, 'samsung_pay')
+      if (!result) {
+        throw gqlError(`Cartão '${cardId}' não encontrado.`, 'NOT_FOUND', 404)
+      }
+      logMutation('addToSamsungPay', `card:${cardId} → provisioned`)
+      return result
     },
 
-    removeFromDigitalWallet: (_, { cardId, provider }) => {
-      const ok = removeFromDigitalWallet(cardId, provider)
-      logMutation('removeFromDigitalWallet', `card:${cardId} provider:${provider} → ${ok ? 'removed' : 'not found'}`)
-      return ok
+    removeFromDigitalWallet: (_, { cardId, provider }, context) => {
+      requireAuth(context)
+      const result = removeFromDigitalWallet(cardId, provider)
+      if (!result) {
+        throw gqlError(`Cartão '${cardId}' com provider '${provider}' não encontrado.`, 'NOT_FOUND', 404)
+      }
+      logMutation('removeFromDigitalWallet', `card:${cardId} provider:${provider} → removed`)
+      return result
     },
 
     // ── KYC ───────────────────────────────────────────────────────
-    validateCpfBigDataCorp: () => true,
-
-    submitKycDocuments: () => ({
-      id: nextId('kyc-doc'),
-      status: 'aguardando_analise',
-      cpfValid: true,
-      documentValid: null,
-      certifaceScore: null,
-      rejectionReason: null,
-      submittedAt: new Date().toISOString(),
-      reviewedAt: null,
-    }),
-
-    submitCertifaceSelfie: () => ({
-      id: nextId('kyc-selfie'),
-      status: 'aprovada',
-      cpfValid: true,
-      documentValid: true,
-      certifaceScore: 0.98,
-      rejectionReason: null,
-      submittedAt: new Date().toISOString(),
-      reviewedAt: new Date().toISOString(),
-    }),
-
-    // ── Approvals ─────────────────────────────────────────────────
-    approveAction: (_, { id }) => {
-      const item = approveAction(id)
-      logMutation('approveAction', `appr:${id} → aprovada at ${item?.decidedAt ?? 'n/a'}`)
-      return item ?? getApprovals()[0]
+    validateCpfBigDataCorp: (_, __, context) => {
+      requireAuth(context)
+      return true
     },
 
-    rejectAction: (_, { id, reason }) => {
+    submitKycDocuments: (_, __, context) => {
+      requireAuth(context)
+      return {
+        id: nextId('kyc-doc'),
+        status: 'aguardando_analise',
+        cpfValid: true,
+        documentValid: null,
+        certifaceScore: null,
+        rejectionReason: null,
+        submittedAt: new Date().toISOString(),
+        reviewedAt: null,
+      }
+    },
+
+    submitCertifaceSelfie: (_, __, context) => {
+      requireAuth(context)
+      return {
+        id: nextId('kyc-selfie'),
+        status: 'aprovada',
+        cpfValid: true,
+        documentValid: true,
+        certifaceScore: 0.98,
+        rejectionReason: null,
+        submittedAt: new Date().toISOString(),
+        reviewedAt: new Date().toISOString(),
+      }
+    },
+
+    // ── Approvals ─────────────────────────────────────────────────
+    approveAction: (_, { id }, context) => {
+      requireAuth(context)
+      const item = approveAction(id)
+      if (!item) {
+        throw gqlError(`Aprovação '${id}' não encontrada.`, 'NOT_FOUND', 404)
+      }
+      logMutation('approveAction', `appr:${id} → aprovada at ${item.decidedAt}`)
+      return item
+    },
+
+    rejectAction: (_, { id, reason }, context) => {
+      requireAuth(context)
+      if (!reason) {
+        throw gqlError('Motivo da rejeição é obrigatório.', 'BAD_REQUEST', 400)
+      }
       const item = rejectAction(id, reason)
+      if (!item) {
+        throw gqlError(`Aprovação '${id}' não encontrada.`, 'NOT_FOUND', 404)
+      }
       logMutation('rejectAction', `appr:${id} → reprovado reason:${reason}`)
-      return item ?? getApprovals()[0]
+      return item
     },
 
     // ── Feedback ──────────────────────────────────────────────────
-    submitFeedback: () => ok(),
+    submitFeedback: (_, __, context) => {
+      requireAuth(context)
+      return ok()
+    },
 
     // ── Rewards ───────────────────────────────────────────────────
     redeemReward: (_, { rewardId } = {}, context) => {
-      const userId = uid(context)
+      const userId = requireAuth(context)
+      if (!rewardId) {
+        throw gqlError('rewardId é obrigatório.', 'BAD_REQUEST', 400)
+      }
       const newPoints = redeemReward(userId, rewardId)
       logMutation('redeemReward', `user:${userId} | reward:${rewardId} → pts:${newPoints}`)
       return ok()
     },
 
     // ── Expenses ──────────────────────────────────────────────────
-    createExpense: (_, { input }) => {
+    createExpense: (_, { input }, context) => {
+      requireAuth(context)
+      if (!input.description) {
+        throw gqlError('Descrição é obrigatória.', 'BAD_REQUEST', 400)
+      }
+      if (!input.amount || input.amount <= 0) {
+        throw gqlError('Valor deve ser maior que zero.', 'BAD_REQUEST', 400)
+      }
+      if (!input.date) {
+        throw gqlError('Data é obrigatória.', 'BAD_REQUEST', 400)
+      }
+      if (!input.category) {
+        throw gqlError('Categoria é obrigatória.', 'BAD_REQUEST', 400)
+      }
       const e = {
         id: nextId('exp'),
         description: input.description,
@@ -774,14 +1215,19 @@ export const resolvers = {
       return e
     },
 
-    deleteExpense: (_, { id }) => {
+    deleteExpense: (_, { id }, context) => {
+      requireAuth(context)
       const removed = deleteExpense(id)
-      logMutation('deleteExpense', `exp:${id} → ${removed ? 'removed' : 'not found'}`)
-      return removed ? ok() : { success: false, message: 'Despesa não encontrada' }
+      if (!removed) {
+        throw gqlError(`Despesa '${id}' não encontrada.`, 'NOT_FOUND', 404)
+      }
+      logMutation('deleteExpense', `exp:${id} → removed`)
+      return ok()
     },
 
     // ── Expenses — OCR simulation ─────────────────────────────────
-    ocrReceipt: () => {
+    ocrReceipt: (_, __, context) => {
+      requireAuth(context)
       const samples = [
         { merchant: 'IKD Restaurante',   amount: 42.90, category: 'Refeição',   confidence: 0.97 },
         { merchant: 'Uber',              amount: 18.70, category: 'Transporte',  confidence: 0.94 },
@@ -803,7 +1249,14 @@ export const resolvers = {
     },
 
     // ── Advances ──────────────────────────────────────────────────
-    createAdvance: (_, { input }) => {
+    createAdvance: (_, { input }, context) => {
+      requireAuth(context)
+      if (!input.amount || input.amount <= 0) {
+        throw gqlError('Valor deve ser maior que zero.', 'BAD_REQUEST', 400)
+      }
+      if (!input.reason) {
+        throw gqlError('Motivo é obrigatório.', 'BAD_REQUEST', 400)
+      }
       const a = {
         id: nextId('adv'),
         amount: input.amount,
@@ -819,7 +1272,14 @@ export const resolvers = {
     },
 
     // ── Reports ───────────────────────────────────────────────────
-    createExpenseReport: (_, { input }) => {
+    createExpenseReport: (_, { input }, context) => {
+      requireAuth(context)
+      if (!input.title) {
+        throw gqlError('Título é obrigatório.', 'BAD_REQUEST', 400)
+      }
+      if (!input.expenseIds || input.expenseIds.length === 0) {
+        throw gqlError('Pelo menos uma despesa deve ser incluída no relatório.', 'BAD_REQUEST', 400)
+      }
       // Calculate total from expense IDs
       const expenses = getExpenses()
       const matchedExpenses = expenses.filter(e => input.expenseIds.includes(e.id))
@@ -841,29 +1301,51 @@ export const resolvers = {
       return r
     },
 
-    submitExpenseReport: (_, { id }) => {
+    submitExpenseReport: (_, { id }, context) => {
+      requireAuth(context)
       const submitted = submitReport(id)
-      logMutation('submitExpenseReport', `rep:${id} → ${submitted ? 'submetido' : 'not found'}`)
-      return submitted ? ok() : { success: false, message: 'Relatório não encontrado' }
+      if (!submitted) {
+        throw gqlError(`Relatório '${id}' não encontrado.`, 'NOT_FOUND', 404)
+      }
+      logMutation('submitExpenseReport', `rep:${id} → submetido`)
+      return ok()
     },
 
     // ── Vouchers ──────────────────────────────────────────────────
     buyVoucher: (_, { input }, context) => {
-      const userId = uid(context)
-      const purchased = buyVoucher(input.voucherId, input.walletId, userId)
-      if (purchased) {
-        logMutation('buyVoucher', `user:${userId} | voucher:${input.voucherId} wallet:${input.walletId} → code:${purchased.code}`)
+      const userId = requireAuth(context)
+      if (!input.voucherId) {
+        throw gqlError('voucherId é obrigatório.', 'BAD_REQUEST', 400)
       }
-      return purchased ?? getAvailableVouchers()[0]
+      if (!input.walletId) {
+        throw gqlError('walletId é obrigatório.', 'BAD_REQUEST', 400)
+      }
+      const purchased = buyVoucher(input.voucherId, input.walletId, userId)
+      if (!purchased) {
+        throw gqlError(`Voucher '${input.voucherId}' não encontrado ou indisponível.`, 'NOT_FOUND', 404)
+      }
+      logMutation('buyVoucher', `user:${userId} | voucher:${input.voucherId} wallet:${input.walletId} → code:${purchased.code}`)
+      return purchased
     },
 
-    analyseVoucher: (_, { code }) => {
+    analyseVoucher: (_, { code }, context) => {
+      requireAuth(context)
       const vouchers = getAvailableVouchers()
       return vouchers[0] ? { ...vouchers[0], code } : null
     },
 
     // ── Geofencing ────────────────────────────────────────────────
-    addGeofenceZone: (_, { input }) => {
+    addGeofenceZone: (_, { input }, context) => {
+      requireAuth(context)
+      if (!input.name) {
+        throw gqlError('Nome da zona é obrigatório.', 'BAD_REQUEST', 400)
+      }
+      if (input.latitude == null || input.longitude == null) {
+        throw gqlError('Latitude e longitude são obrigatórias.', 'BAD_REQUEST', 400)
+      }
+      if (!input.radiusMeters || input.radiusMeters <= 0) {
+        throw gqlError('Raio deve ser maior que zero.', 'BAD_REQUEST', 400)
+      }
       const zone = {
         id: input.id,
         name: input.name,
@@ -880,20 +1362,29 @@ export const resolvers = {
       return { id: zone.id }
     },
 
-    removeGeofenceZone: (_, { id }) => {
+    removeGeofenceZone: (_, { id }, context) => {
+      requireAuth(context)
       const removed = removeGeofenceZone(id)
-      logMutation('removeGeofenceZone', `zone:${id} → ${removed ? 'removed' : 'not found'}`)
+      if (!removed) {
+        throw gqlError(`Zona '${id}' não encontrada.`, 'NOT_FOUND', 404)
+      }
+      logMutation('removeGeofenceZone', `zone:${id} → removed`)
       return removed
     },
 
-    toggleGeofenceZone: (_, { id, active }) => {
+    toggleGeofenceZone: (_, { id, active }, context) => {
+      requireAuth(context)
       const result = toggleGeofenceZone(id, active)
+      if (result === null) {
+        throw gqlError(`Zona '${id}' não encontrada.`, 'NOT_FOUND', 404)
+      }
       logMutation('toggleGeofenceZone', `zone:${id} → isActive:${result}`)
-      return result ?? false
+      return result
     },
 
     // ── Flow Tokens ─────────────────────────────────────────────
-    startFlow: (_, { flowType }) => {
+    startFlow: (_, { flowType }, context) => {
+      requireAuth(context)
       _flowTokenCounter++
       const token = `flow_${flowType}_${Date.now()}_${_flowTokenCounter}`
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString()
@@ -902,7 +1393,8 @@ export const resolvers = {
       return { token, flowType, expiresAt }
     },
 
-    validateFlowToken: (_, { token }) => {
+    validateFlowToken: (_, { token }, context) => {
+      requireAuth(context)
       const entry = _flowTokens.get(token)
       if (!entry) return false
       if (new Date() > new Date(entry.expiresAt)) {
@@ -913,10 +1405,188 @@ export const resolvers = {
     },
 
     // ── External Benefits ─────────────────────────────────────────
-    activateBenefit: (_, { id }) => {
+    activateBenefit: (_, { id }, context) => {
+      requireAuth(context)
       activateBenefit(id)
       logMutation('activateBenefit', `benefit:${id} → ativo:true`)
       return ok()
+    },
+
+    // ── HR ──────────────────────────────────────────────────────
+    clockIn: (_, { latitude, longitude }, context) => {
+      const userId = requireAuth(context)
+      const entry = {
+        id: nextId('clk'),
+        employeeId: userId,
+        timestamp: new Date().toISOString(),
+        type: 'entry',
+        reason: null,
+        latitude: latitude ?? -23.5630,
+        longitude: longitude ?? -46.6543,
+        approved: true,
+      }
+      addClockEntry(entry)
+      logMutation('clockIn', `user:${userId} | ${entry.timestamp}`)
+      return entry
+    },
+
+    clockOut: (_, __, context) => {
+      const userId = requireAuth(context)
+      const entry = {
+        id: nextId('clk'),
+        employeeId: userId,
+        timestamp: new Date().toISOString(),
+        type: 'exit',
+        reason: null,
+        latitude: -23.5630,
+        longitude: -46.6543,
+        approved: true,
+      }
+      addClockEntry(entry)
+      logMutation('clockOut', `user:${userId} | ${entry.timestamp}`)
+      return entry
+    },
+
+    manualClockEntry: (_, { date, timeIn, timeOut, reason }, context) => {
+      const userId = requireAuth(context)
+      if (!date) {
+        throw gqlError('Data é obrigatória para registro manual.', 'BAD_REQUEST', 400)
+      }
+      if (!timeIn || !timeOut) {
+        throw gqlError('Horários de entrada e saída são obrigatórios para registro manual.', 'BAD_REQUEST', 400)
+      }
+      if (!reason) {
+        throw gqlError('Motivo é obrigatório para registro manual.', 'BAD_REQUEST', 400)
+      }
+      const entry = {
+        id: nextId('clk'),
+        employeeId: userId,
+        timestamp: `${date}T${timeIn}:00.000Z`,
+        type: 'manual',
+        reason,
+        latitude: null,
+        longitude: null,
+        approved: false,
+      }
+      addClockEntry(entry)
+      logMutation('manualClockEntry', `user:${userId} | ${date} ${timeIn}-${timeOut} reason:${reason}`)
+      return entry
+    },
+
+    scheduleVacation: (_, { startDate, endDate }, context) => {
+      const userId = requireAuth(context)
+      if (!startDate || !endDate) {
+        throw gqlError('Datas de início e fim são obrigatórias.', 'BAD_REQUEST', 400)
+      }
+      const start = new Date(startDate)
+      const end = new Date(endDate)
+      const now = new Date()
+      now.setHours(0, 0, 0, 0)
+      if (start < now) {
+        throw gqlError('Data de início não pode ser no passado.', 'BAD_REQUEST', 400)
+      }
+      if (end < start) {
+        throw gqlError('Data de fim deve ser posterior à data de início.', 'BAD_REQUEST', 400)
+      }
+      // Check for overlapping vacation periods
+      const existingVacations = getVacationHistory()
+      const overlapping = existingVacations.find(v => {
+        const vStart = new Date(v.startDate)
+        const vEnd = new Date(v.endDate)
+        return start <= vEnd && end >= vStart
+      })
+      if (overlapping) {
+        throw gqlError(
+          `Período de férias sobrepõe um período existente (${overlapping.startDate} a ${overlapping.endDate}).`,
+          'CONFLICT', 409
+        )
+      }
+      const daysCount = Math.ceil((end - start) / 86400000) + 1
+      const period = {
+        id: nextId('vac'),
+        startDate,
+        endDate,
+        daysCount,
+        status: 'pending',
+        approver: null,
+      }
+      addVacationPeriod(period)
+      logMutation('scheduleVacation', `user:${userId} | ${startDate} → ${endDate} (${daysCount}d)`)
+      return period
+    },
+
+    // ── Credit ─────────────────────────────────────────────────
+    createCreditConsent: (_, { simulationId }, context) => {
+      requireAuth(context)
+      if (!simulationId) {
+        throw gqlError('simulationId é obrigatório.', 'BAD_REQUEST', 400)
+      }
+      logMutation('createCreditConsent', `sim:${simulationId} → consent granted`)
+      return true
+    },
+
+    executeCreditOperation: (_, { consentId }, context) => {
+      requireAuth(context)
+      if (!consentId) {
+        throw gqlError('consentId é obrigatório.', 'BAD_REQUEST', 400)
+      }
+      logMutation('executeCreditOperation', `consent:${consentId} → executed`)
+      return true
+    },
+
+    // ── Travel ─────────────────────────────────────────────────
+    createTravel: (_, { destination, startDate, endDate, purpose }, context) => {
+      const userId = requireAuth(context)
+      if (!destination) {
+        throw gqlError('Destino é obrigatório.', 'BAD_REQUEST', 400)
+      }
+      if (!startDate || !endDate) {
+        throw gqlError('Datas de início e fim são obrigatórias.', 'BAD_REQUEST', 400)
+      }
+      const start = new Date(startDate)
+      const end = new Date(endDate)
+      const now = new Date()
+      now.setHours(0, 0, 0, 0)
+      if (start < now) {
+        throw gqlError('Data de início da viagem não pode ser no passado.', 'BAD_REQUEST', 400)
+      }
+      if (end < start) {
+        throw gqlError('Data de fim deve ser posterior à data de início.', 'BAD_REQUEST', 400)
+      }
+      const travel = {
+        id: nextId('trv'),
+        destination,
+        startDate,
+        endDate,
+        purpose,
+        status: 'draft',
+        totalBudget: 0.0,
+      }
+      addTravel(travel)
+      logMutation('createTravel', `user:${userId} | ${destination} ${startDate}→${endDate}`)
+      return travel
+    },
+
+    submitTravel: (_, { id }, context) => {
+      const userId = requireAuth(context)
+      const travel = getTravelById(id)
+      if (!travel) {
+        throw gqlError(`Viagem '${id}' não encontrada.`, 'NOT_FOUND', 404)
+      }
+      const updated = updateTravelStatus(id, 'pending')
+      logMutation('submitTravel', `user:${userId} | trv:${id} → pending`)
+      return updated
+    },
+
+    cancelTravel: (_, { id }, context) => {
+      const userId = requireAuth(context)
+      const travel = getTravelById(id)
+      if (!travel) {
+        throw gqlError(`Viagem '${id}' não encontrada.`, 'NOT_FOUND', 404)
+      }
+      const removed = removeTravel(id)
+      logMutation('cancelTravel', `user:${userId} | trv:${id} → cancelled`)
+      return removed
     },
   },
 }

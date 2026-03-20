@@ -27,6 +27,16 @@ import {
   buildSeedKycResults,
   buildSeedSessions,
   buildSeedSecurityActivity,
+  buildSeedClockEntries,
+  buildSeedHourBank,
+  buildSeedVacationBalance,
+  buildSeedVacationHistory,
+  buildSeedPayslips,
+  buildSeedHrEvents,
+  buildSeedClockLocks,
+  buildSeedLoans,
+  buildSeedTravels,
+  buildSeedTravelPolicy,
 } from './seeds.js'
 
 import {
@@ -66,6 +76,18 @@ const state = {
   nextDepositsByUser: {},  // { [userId]: [{ walletId, amount, scheduledDate, description }] }
   cardDeliveries: {},      // { [cardId]: CardDelivery }
   kycResultsByUser: {},    // { [userId]: KycResult }
+
+  // HR, Credit, Travel
+  clockEntries: [],
+  hourBank: null,
+  vacationBalance: null,
+  vacationHistory: [],
+  payslips: [],
+  hrEvents: [],
+  clockLocks: [],
+  loans: [],
+  travels: [],
+  travelPolicy: null,
 
   // Per-user ephemeral state
   favorites: {},           // { [userId]: Set<partnerId> }
@@ -144,6 +166,17 @@ export function reset() {
   state.nextDepositsByUser = buildSeedNextDeposits()
   state.cardDeliveries = buildSeedCardDeliveries()
   state.kycResultsByUser = buildSeedKycResults()
+
+  state.clockEntries = buildSeedClockEntries()
+  state.hourBank = buildSeedHourBank()
+  state.vacationBalance = buildSeedVacationBalance()
+  state.vacationHistory = buildSeedVacationHistory()
+  state.payslips = buildSeedPayslips()
+  state.hrEvents = buildSeedHrEvents()
+  state.clockLocks = buildSeedClockLocks()
+  state.loans = buildSeedLoans()
+  state.travels = buildSeedTravels()
+  state.travelPolicy = buildSeedTravelPolicy()
 
   state.favorites = {}
   state.notifPrefs = {}
@@ -590,6 +623,136 @@ export function reclassifyTransaction(userId, transactionId, newCategory) {
   tx.categoria = newCategory
   return true
 }
+
+// ─── HR Getters ──────────────────────────────────────────────────────────────
+export function getClockEntries() { return state.clockEntries }
+export function getHourBank() { return state.hourBank }
+export function getVacationBalance() { return state.vacationBalance }
+export function getVacationHistory() { return state.vacationHistory }
+export function getPayslips() { return state.payslips }
+export function getHrEvents() { return state.hrEvents }
+export function getClockLocks() { return state.clockLocks }
+
+// ─── HR Mutators ─────────────────────────────────────────────────────────────
+export function addClockEntry(entry) {
+  state.clockEntries.push(entry)
+  return entry
+}
+
+export function discardClockEntry(id) {
+  const idx = state.clockEntries.findIndex(e => e.id === id)
+  if (idx === -1) return false
+  state.clockEntries[idx].approved = false
+  state.clockEntries[idx].reason = 'Desconsiderado'
+  return true
+}
+
+export function restoreClockEntry(id) {
+  const idx = state.clockEntries.findIndex(e => e.id === id)
+  if (idx === -1) return false
+  state.clockEntries[idx].approved = true
+  state.clockEntries[idx].reason = null
+  return true
+}
+
+export function addVacationPeriod(period) {
+  state.vacationHistory.push(period)
+  if (state.vacationBalance) {
+    state.vacationBalance.usedDays += period.daysCount
+    state.vacationBalance.availableDays -= period.daysCount
+  }
+  return period
+}
+
+// ─── Credit Getters ──────────────────────────────────────────────────────────
+export function getLoans() { return state.loans }
+export function getLoanById(id) { return state.loans.find(l => l.id === id) ?? null }
+
+// ─── Travel Getters & Mutators ───────────────────────────────────────────────
+export function getTravels() { return state.travels }
+export function getTravelById(id) { return state.travels.find(t => t.id === id) ?? null }
+export function getTravelPolicy() { return state.travelPolicy }
+
+export function addTravel(travel) {
+  state.travels.push(travel)
+  return travel
+}
+
+export function updateTravelStatus(id, status) {
+  const t = state.travels.find(x => x.id === id)
+  if (!t) return null
+  t.status = status
+  return t
+}
+
+export function removeTravel(id) {
+  const idx = state.travels.findIndex(t => t.id === id)
+  if (idx === -1) return false
+  state.travels.splice(idx, 1)
+  return true
+}
+
+export function addTravelExpense(travelId, { type, description, amount, date }) {
+  const expense = {
+    id: `texp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+    travelId,
+    type,
+    description,
+    amount,
+    date,
+    receiptUrl: null,
+  }
+  const travel = state.travels.find(t => t.id === travelId)
+  if (travel) {
+    travel.totalBudget += amount
+  }
+  return expense
+}
+
+// ─── Rate limiting / failed attempts tracking ──────────────────────────────
+const _failedAttempts = {}
+
+export function trackFailedAttempt(key) {
+  if (!_failedAttempts[key]) _failedAttempts[key] = { count: 0, lockedUntil: null }
+  _failedAttempts[key].count++
+  if (_failedAttempts[key].count >= 5) {
+    _failedAttempts[key].lockedUntil = Date.now() + 15 * 60 * 1000 // 15 min
+  }
+  return _failedAttempts[key]
+}
+
+export function isRateLimited(key) {
+  const entry = _failedAttempts[key]
+  if (!entry) return false
+  if (entry.lockedUntil && Date.now() < entry.lockedUntil) return true
+  if (entry.lockedUntil && Date.now() >= entry.lockedUntil) {
+    delete _failedAttempts[key]
+    return false
+  }
+  return false
+}
+
+export function clearFailedAttempts(key) { delete _failedAttempts[key] }
+
+// ─── Daily transaction totals tracking ──────────────────────────────────────
+const _dailyTotals = {}
+
+export function getDailyTotal(userId) {
+  const today = new Date().toISOString().slice(0, 10)
+  const key = `${userId}:${today}`
+  return _dailyTotals[key] ?? 0
+}
+
+export function addToDailyTotal(userId, amount) {
+  const today = new Date().toISOString().slice(0, 10)
+  const key = `${userId}:${today}`
+  _dailyTotals[key] = (_dailyTotals[key] ?? 0) + amount
+  return _dailyTotals[key]
+}
+
+const DAILY_LIMIT = 50000 // R$ 50.000 daily transaction limit
+
+export function getDailyLimit() { return DAILY_LIMIT }
 
 /** State summary for /status endpoint */
 export function getStateSummary() {

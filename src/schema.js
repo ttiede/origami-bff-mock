@@ -172,6 +172,7 @@ export const typeDefs = /* GraphQL */ `
   # ─── Queries ────────────────────────────────────────────────────────
   type Query {
     # Auth
+    me: AuthUser
     findByCpf(cpf: String!): AuthUser
     sessions: [AuthSession!]!
     securityActivity: [SecurityEvent!]!
@@ -245,6 +246,28 @@ export const typeDefs = /* GraphQL */ `
 
     # Geofencing
     geofenceZones: [GeofenceZone!]!
+
+    # HR
+    timeSheet(date: String!): TimeSheet
+    timeSheetRange(from: String!, to: String!): [TimeSheet!]!
+    hourBank: HourBank
+    vacationBalance: VacationBalance
+    vacationHistory: [VacationPeriod!]!
+    payslips(year: Int!): [Payslip!]!
+    hrEvents(month: Int!, year: Int!): [HrEvent!]!
+    getEvents(month: Int!, year: Int!): [HrEvent!]!
+    clockLocks: [ClockLock!]!
+
+    # Credit
+    requiredCreditFiles(type: String!): [RequiredFile!]!
+    loans: [Loan!]!
+    loanDetail(id: ID!): Loan
+    creditSimulation(amount: Float!, installments: Int!, type: String!): CreditSimulation
+
+    # Travel
+    travels: [TravelRequest!]!
+    travelDetail(id: ID!): TravelRequest
+    travelPolicy: TravelPolicy
   }
 
   # ─── Mutations ──────────────────────────────────────────────────────
@@ -357,6 +380,25 @@ export const typeDefs = /* GraphQL */ `
 
     # Expenses — OCR
     ocrReceipt(imageBase64: String!): OcrReceiptResult!
+
+    # HR
+    discardClockEntry(id: ID!): Boolean!
+    restoreClockEntry(id: ID!): Boolean!
+    clockIn(latitude: Float, longitude: Float): ClockEntry
+    clockOut: ClockEntry
+    manualClockEntry(date: String!, timeIn: String!, timeOut: String!, reason: String!): ClockEntry
+    scheduleVacation(startDate: String!, endDate: String!): VacationPeriod
+
+    # Credit
+    uploadCreditFile(loanId: ID!, fileType: String!, fileName: String!): RequiredFile!
+    createCreditConsent(simulationId: ID!): Boolean
+    executeCreditOperation(consentId: ID!): Boolean
+
+    # Travel
+    addTravelExpense(travelId: ID!, type: String!, description: String!, amount: Float!, date: String!): TravelExpense!
+    createTravel(destination: String!, startDate: String!, endDate: String!, purpose: String!): TravelRequest
+    submitTravel(id: ID!): TravelRequest
+    cancelTravel(id: ID!): Boolean
   }
 
   # ─── Flow Token types ──────────────────────────────────────────────
@@ -791,5 +833,149 @@ export const typeDefs = /* GraphQL */ `
 
   type GeoZoneAddResult {
     id: ID!
+  }
+
+  # ─── HR types ──────────────────────────────────────────────────────────
+  type ClockEntry {
+    id: ID!
+    employeeId: String!
+    timestamp: String!
+    type: String!
+    reason: String
+    latitude: Float
+    longitude: Float
+    approved: Boolean
+  }
+
+  type TimeSheet {
+    date: String!
+    entries: [ClockEntry!]!
+    workedMinutes: Int!
+    extraMinutes: Int!
+    nightMinutes: Int!
+    breakMinutes: Int!
+  }
+
+  type HourBank {
+    balanceMinutes: Int!
+    monthlyExtract: [HourBankEntry!]!
+  }
+
+  type HourBankEntry {
+    month: String!
+    creditedMinutes: Int!
+    debitedMinutes: Int!
+    balanceMinutes: Int!
+  }
+
+  type VacationBalance {
+    totalDays: Int!
+    usedDays: Int!
+    availableDays: Int!
+    accrualStart: String!
+    accrualEnd: String!
+  }
+
+  type VacationPeriod {
+    id: ID!
+    startDate: String!
+    endDate: String!
+    daysCount: Int!
+    status: String!
+    approver: String
+  }
+
+  type Payslip {
+    id: ID!
+    month: Int!
+    year: Int!
+    grossSalary: Float!
+    netSalary: Float!
+    deductions: [PayslipItem!]!
+    benefits: [PayslipItem!]!
+    pdfUrl: String
+  }
+
+  type PayslipItem {
+    description: String!
+    amount: Float!
+  }
+
+  type HrEvent {
+    id: ID!
+    title: String!
+    description: String!
+    date: String!
+    type: String!
+    attendees: [String!]!
+  }
+
+  type ClockLock {
+    id: ID!
+    name: String!
+    type: String!
+    active: Boolean!
+    range: String
+  }
+
+  # ─── Credit types ─────────────────────────────────────────────────────
+  type CreditSimulation {
+    id: ID!
+    type: String!
+    amount: Float!
+    installments: Int!
+    monthlyPayment: Float!
+    interestRate: Float!
+    totalCost: Float!
+    iofTax: Float!
+  }
+
+  type RequiredFile {
+    id: ID!
+    type: String!
+    label: String!
+    description: String!
+    required: Boolean!
+    accepted: Boolean!
+  }
+
+  type Loan {
+    id: ID!
+    type: String!
+    originalAmount: Float!
+    remainingBalance: Float!
+    installmentsPaid: Int!
+    installmentsTotal: Int!
+    monthlyPayment: Float!
+    nextPaymentDate: String!
+    status: String!
+  }
+
+  # ─── Travel types ─────────────────────────────────────────────────────
+  type TravelRequest {
+    id: ID!
+    destination: String!
+    startDate: String!
+    endDate: String!
+    purpose: String!
+    status: String!
+    totalBudget: Float!
+  }
+
+  type TravelExpense {
+    id: ID!
+    travelId: String!
+    type: String!
+    description: String!
+    amount: Float!
+    date: String!
+    receiptUrl: String
+  }
+
+  type TravelPolicy {
+    maxDailyMeal: Float!
+    maxHotelNight: Float!
+    requiresPreApproval: Boolean!
+    advanceDays: Int!
   }
 `
