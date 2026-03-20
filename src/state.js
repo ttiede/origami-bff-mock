@@ -76,9 +76,18 @@ function ts() {
   return new Date().toISOString().slice(11, 19)
 }
 
-// ─── Mutation logger ────────────────────────────────────────────────────────
+// ─── Mutation tracker ────────────────────────────────────────────────────────
+const _mutations = { total: 0, lastMutation: null, lastMutationAt: null }
+
 export function logMutation(name, detail) {
+  _mutations.total++
+  _mutations.lastMutation = name
+  _mutations.lastMutationAt = new Date().toISOString()
   console.log(`[${ts()}] MUTATION ${name.padEnd(30)} | ${detail}`)
+}
+
+export function getMutationStats() {
+  return { ..._mutations }
 }
 
 // ─── Initialize / Reset ─────────────────────────────────────────────────────
@@ -116,6 +125,10 @@ export function reset() {
     if (!state.favorites['1']) state.favorites['1'] = new Set()
     state.favorites['1'].add(pid)
   })
+
+  _mutations.total = 0
+  _mutations.lastMutation = null
+  _mutations.lastMutationAt = null
 
   console.log(`[${ts()}] STATE    Reset to seed data — all state cleared`)
 }
@@ -507,6 +520,34 @@ export function reclassifyTransaction(userId, transactionId, newCategory) {
   if (!tx) return false
   tx.categoria = newCategory
   return true
+}
+
+/** State summary for /status endpoint */
+export function getStateSummary() {
+  const totalWallets = Object.values(state.walletsByUser).reduce((s, w) => s + w.length, 0)
+  const totalCards = Object.values(state.cardsByUser).reduce((s, c) => s + c.length, 0)
+  const totalTransactions = Object.values(state.transactionsByUser).reduce((s, t) => s + t.length, 0)
+  const totalNotifications = Object.values(state.notificationsByUser).reduce((s, n) => s + n.length, 0)
+  return {
+    users: state.users.length,
+    wallets: totalWallets,
+    cards: totalCards,
+    transactions: totalTransactions,
+    notifications: totalNotifications,
+    approvals: state.approvals.length,
+    expenses: state.expenses.length,
+    advances: state.advances.length,
+    reports: state.reports.length,
+    vouchers: {
+      available: state.availableVouchers.length,
+      purchased: state.myVouchers.length,
+    },
+    disputes: state.disputes.length,
+    reimbursements: state.reimbursements.length,
+    balanceRequests: state.balanceRequests.length,
+    geofenceZones: state.geofenceZones.length,
+    digitalWalletCards: state.digitalWalletCards.length,
+  }
 }
 
 /** Login session tracking */
