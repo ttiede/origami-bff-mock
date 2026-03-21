@@ -3,7 +3,7 @@ import { makeToken, getUserIdFromRequest } from './auth.js'
 import {
   nextId, logMutation,
   // Getters
-  findUserByCpf, findUserById,
+  getUsers, findUserByCpf, findUserById,
   getWallets, findWallet,
   getCards, getCardById, getTransactions,
   getNotifications, getNotifPrefs,
@@ -38,12 +38,12 @@ import {
   // HR
   getClockEntries, getHourBank, getVacationBalance, getVacationHistory,
   getPayslips, getHrEvents, getClockLocks,
-  addClockEntry, addVacationPeriod,
+  addClockEntry, discardClockEntry, restoreClockEntry, addVacationPeriod,
   // Credit
   getLoans, getLoanById,
   // Travel
   getTravels, getTravelById, getTravelPolicy,
-  addTravel, updateTravelStatus, removeTravel,
+  addTravel, updateTravelStatus, removeTravel, addTravelExpense,
   // Rate limiting & daily totals
   trackFailedAttempt, isRateLimited, clearFailedAttempts,
   getDailyTotal, addToDailyTotal, getDailyLimit,
@@ -450,6 +450,48 @@ export const resolvers = {
     },
 
     travelPolicy: () => getTravelPolicy(),
+
+    // ── Missing Query resolvers ────────────────────────────────
+    me: (_, __, context) => {
+      const auth = context.request?.headers?.get('authorization') ?? '';
+      const tokenNum = auth.replace('Bearer origami-mock-', '');
+      const user = getUsers().find(u => u.id === tokenNum);
+      return user || null;
+    },
+
+    requiredCreditFiles: (_, { type }) => {
+      const files = [
+        { id: 'rf-1', type: 'identity', label: 'Documento de identidade', description: 'RG ou CNH (frente e verso)', required: true, accepted: false },
+        { id: 'rf-2', type: 'address', label: 'Comprovante de endereço', description: 'Conta de luz, água ou telefone (últimos 3 meses)', required: true, accepted: false },
+        { id: 'rf-3', type: 'income', label: 'Comprovante de renda', description: 'Holerite ou declaração de IR', required: true, accepted: false },
+      ];
+      if (type === 'consignado') {
+        files.push({ id: 'rf-4', type: 'payroll', label: 'Autorização de consignação', description: 'Documento assinado pelo RH', required: true, accepted: false });
+      }
+      return files;
+    },
+
+    timeSheetRange: (_, { from, to }) => {
+      const sheets = [];
+      let d = new Date(from);
+      const end = new Date(to);
+      while (d <= end) {
+        if (d.getDay() !== 0 && d.getDay() !== 6) {
+          sheets.push({
+            date: d.toISOString().split('T')[0],
+            entries: [],
+            workedMinutes: 480 + Math.floor(Math.random() * 30),
+            extraMinutes: Math.floor(Math.random() * 20),
+            nightMinutes: 0,
+            breakMinutes: 60,
+          });
+        }
+        d.setDate(d.getDate() + 1);
+      }
+      return sheets;
+    },
+
+    getEvents: (_, args) => resolvers.Query.hrEvents(_, args),
   },
 
   // ══════════════════════════════════════════════════════════════════
@@ -681,7 +723,7 @@ export const resolvers = {
         logMutation('processQrPayment', `user:${userId} | SIMULATED FAILURE`)
         throw gqlError('Falha simulada no servidor.', 'INTERNAL_ERROR', 500)
       }
-      if (!input.qrCode) {
+      if (!(input.qrData || input.qrCode)) {
         throw gqlError('QR Code é obrigatório.', 'BAD_REQUEST', 400)
       }
       validateWalletTransaction(userId, input.walletId, input.amount, 'QR Payment')
@@ -699,7 +741,7 @@ export const resolvers = {
         logMutation('payBoleto', `user:${userId} | SIMULATED FAILURE`)
         throw gqlError('Falha simulada no servidor.', 'INTERNAL_ERROR', 500)
       }
-      if (!input.barCode) {
+      if (!(input.barcode || input.barCode)) {
         throw gqlError('Código de barras do boleto é obrigatório.', 'BAD_REQUEST', 400)
       }
       validateWalletTransaction(userId, input.walletId, input.amount, 'Boleto')
@@ -1587,6 +1629,28 @@ export const resolvers = {
       const removed = removeTravel(id)
       logMutation('cancelTravel', `user:${userId} | trv:${id} → cancelled`)
       return removed
+    },
+
+    // ── Missing Mutation resolvers ──────────────────────────────
+    discardClockEntry: (_, { id }) => {
+      return discardClockEntry(id);
+    },
+
+    restoreClockEntry: (_, { id }) => {
+      return restoreClockEntry(id);
+    },
+
+    uploadCreditFile: (_, { loanId, fileType, fileName }) => ({
+      id: `file-${Date.now()}`,
+      type: fileType,
+      label: fileName,
+      description: `Uploaded ${fileName}`,
+      required: true,
+      accepted: false,
+    }),
+
+    addTravelExpense: (_, { travelId, type, description, amount, date }) => {
+      return addTravelExpense(travelId, { type, description, amount, date });
     },
   },
 }
