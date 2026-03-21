@@ -139,6 +139,10 @@ export function getMutationStats() {
   return { ..._mutations }
 }
 
+// ─── Rate limiting & daily totals (declared before reset() to avoid TDZ) ────
+const _failedAttempts = {}
+const _dailyTotals = {}
+
 // ─── Initialize / Reset ─────────────────────────────────────────────────────
 export function reset() {
   _seq = 1
@@ -714,7 +718,6 @@ export function addTravelExpense(travelId, { type, description, amount, date }) 
 }
 
 // ─── Rate limiting / failed attempts tracking ──────────────────────────────
-const _failedAttempts = {}
 
 export function trackFailedAttempt(key) {
   if (!_failedAttempts[key]) _failedAttempts[key] = { count: 0, lockedUntil: null }
@@ -739,7 +742,6 @@ export function isRateLimited(key) {
 export function clearFailedAttempts(key) { delete _failedAttempts[key] }
 
 // ─── Daily transaction totals tracking ──────────────────────────────────────
-const _dailyTotals = {}
 
 export function getDailyTotal(userId) {
   const today = new Date().toISOString().slice(0, 10)
