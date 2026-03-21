@@ -38,78 +38,58 @@ const yoga = createYoga({
     error: (...args) => console.error('[ERROR]', ...args),
   },
   plugins: [
-    (() => {
-      // Closure to share state between onExecute and onExecuteDone
-      let _lastReq = null
-      return {
+    {
+      onResultProcess({ request, result }) {
+        try {
+          const auth = request?.headers?.get?.('authorization') ?? '-'
+          const userId = auth.startsWith('Bearer origami-mock-')
+            ? auth.replace('Bearer origami-mock-', '').split('-')[0]
+            : auth !== '-' ? 'jwt' : 'anon'
+          const scenario = request?.headers?.get?.('x-test-scenario') ?? null
 
-      onExecute({ args }) {
-        const startMs = Date.now()
-        const op = args.document?.definitions?.[0]
-        let opName = op?.name?.value ?? null
-        if (!opName && op?.selectionSet?.selections?.length) {
-          opName = op.selectionSet.selections.map(s => s.name?.value).filter(Boolean).join('+')
-        }
-        opName = opName || '(anonymous)'
-        const opType = op?.operation ?? 'query'
-        const auth = args.contextValue?.request?.headers?.get('authorization') ?? '-'
-        const scenario = args.contextValue?.request?.headers?.get('x-test-scenario') ?? null
-        const userId = auth.startsWith('Bearer origami-mock-')
-          ? auth.replace('Bearer origami-mock-', '').split('-')[0]
-          : auth !== '-' ? 'jwt' : 'anon'
-        const ts = new Date().toISOString().slice(11, 23)
-        const vars = args.variableValues && Object.keys(args.variableValues).length > 0
-          ? ` vars=${JSON.stringify(args.variableValues)}`
-          : ''
+          // Extract operation info from result
+          const data = result?.data ?? {}
+          const errors = result?.errors ?? []
+          const opKeys = Object.keys(data)
+          const opName = opKeys[0] ?? '(anonymous)'
+          const opType = errors.length > 0 && !data[opKeys[0]] ? 'mutation' : 'query'
+          const hasErrors = errors.length > 0
 
-        _lastReq = { startMs, opName, opType, userId, scenario }
-
-        console.log(`[${ts}] ${opType.toUpperCase().padEnd(8)} ${opName.padEnd(35)} | user:${userId}${scenario ? ` scenario:${scenario}` : ''}${vars}`)
-      },
-      onExecuteDone({ result }) {
-        const ts = new Date().toISOString().slice(11, 23)
-        const { startMs, opName, opType, userId, scenario } = _lastReq ?? {}
-        const durationMs = startMs ? Date.now() - startMs : 0
-        const hasErrors = result?.errors?.length > 0
-
-        // Build response summary
-        let responseSummary = ''
-        if (result?.data) {
-          const keys = Object.keys(result.data)
-          responseSummary = keys.map(k => {
-            const v = result.data[k]
+          const responseSummary = opKeys.map(k => {
+            const v = data[k]
             if (v === null) return `${k}=null`
             if (Array.isArray(v)) return `${k}=[${v.length}]`
             if (typeof v === 'object') return `${k}={ok}`
-            return `${k}=${v}`
+            return `${k}=${String(v).slice(0, 50)}`
           }).join(', ')
-        }
 
-        // Log to ring buffer
-        logRequest({
-          operation: opName,
-          type: opType,
-          userId,
-          scenario,
-          status: hasErrors ? 'error' : 'ok',
-          durationMs,
-          variables: args.variableValues ?? {},
-          response: responseSummary,
-          errors: hasErrors ? result.errors.map(e => ({
-            message: e.message,
-            code: e.extensions?.code,
-            httpStatus: e.extensions?.http?.status,
-          })) : [],
-        })
+          const ts = new Date().toISOString().slice(11, 23)
+          console.log(`[${ts}] ${opType.toUpperCase().padEnd(8)} ${opName.padEnd(35)} | user:${userId}${scenario ? ` sc:${scenario}` : ''} → ${responseSummary}`)
 
-        if (hasErrors) {
-          result.errors.forEach(e => {
-            console.error(`[${ts}] ERROR    ${e.message} (${durationMs}ms)`)
+          if (hasErrors) {
+            errors.forEach(e => console.error(`[${ts}] ERROR    ${e.message}`))
+          }
+
+          // Log to ring buffer
+          logRequest({
+            operation: opName,
+            type: opType,
+            userId,
+            scenario,
+            status: hasErrors ? 'error' : 'ok',
+            durationMs: 0,
+            response: responseSummary,
+            errors: hasErrors ? errors.map(e => ({
+              message: e.message,
+              code: e.extensions?.code,
+              httpStatus: e.extensions?.http?.status,
+            })) : [],
           })
+        } catch (e) {
+          console.error('[logger] Error:', e.message)
         }
-        console.log(`[${ts}] RESPONSE ${responseSummary} (${durationMs}ms)`)
       },
-    }})(),
+    },
   ],
 })
 
