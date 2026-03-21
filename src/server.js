@@ -3,6 +3,7 @@ import { createSchema, createYoga } from 'graphql-yoga'
 import { typeDefs } from './schema.js'
 import { resolvers } from './resolvers.js'
 import { reset, getStateSummary, getMutationStats, setFailureMode, getFailureMode } from './state.js'
+import { logRequest, getLogs, clearLogs, getLogStats, getActiveScenarios, setScenario, clearScenarios, getScenario, TEST_SCENARIOS } from './request_logger.js'
 
 const startedAt = Date.now()
 
@@ -39,6 +40,7 @@ const yoga = createYoga({
   plugins: [
     {
       onExecute({ args }) {
+        const startMs = Date.now()
         const op = args.document?.definitions?.[0]
         let opName = op?.name?.value ?? null
         if (!opName && op?.selectionSet?.selections?.length) {
@@ -47,34 +49,62 @@ const yoga = createYoga({
         opName = opName || '(anonymous)'
         const opType = op?.operation ?? 'query'
         const auth = args.contextValue?.request?.headers?.get('authorization') ?? '-'
+        const scenario = args.contextValue?.request?.headers?.get('x-test-scenario') ?? null
         const userId = auth.startsWith('Bearer origami-mock-')
-          ? auth.replace('Bearer origami-mock-', 'user:')
+          ? auth.replace('Bearer origami-mock-', '').split('-')[0]
           : auth !== '-' ? 'jwt' : 'anon'
         const ts = new Date().toISOString().slice(11, 23)
         const vars = args.variableValues && Object.keys(args.variableValues).length > 0
           ? ` vars=${JSON.stringify(args.variableValues)}`
           : ''
-        console.log(`[${ts}] ${opType.toUpperCase().padEnd(8)} ${opName.padEnd(35)} | ${userId}${vars}`)
+
+        // Store start time for duration calculation
+        args._origami = { startMs, opName, opType, userId, scenario }
+
+        console.log(`[${ts}] ${opType.toUpperCase().padEnd(8)} ${opName.padEnd(35)} | user:${userId}${scenario ? ` scenario:${scenario}` : ''}${vars}`)
       },
-      onExecuteDone({ result }) {
+      onExecuteDone({ args, result }) {
         const ts = new Date().toISOString().slice(11, 23)
-        if (result?.errors?.length) {
-          result.errors.forEach(e => {
-            console.error(`[${ts}] ERROR    ${e.message}`)
-          })
-        }
-        // Log response summary (first 200 chars of data keys)
+        const { startMs, opName, opType, userId, scenario } = args._origami ?? {}
+        const durationMs = startMs ? Date.now() - startMs : 0
+        const hasErrors = result?.errors?.length > 0
+
+        // Build response summary
+        let responseSummary = ''
         if (result?.data) {
           const keys = Object.keys(result.data)
-          const summary = keys.map(k => {
+          responseSummary = keys.map(k => {
             const v = result.data[k]
             if (v === null) return `${k}=null`
-            if (Array.isArray(v)) return `${k}=[${v.length} items]`
-            if (typeof v === 'object') return `${k}={...}`
+            if (Array.isArray(v)) return `${k}=[${v.length}]`
+            if (typeof v === 'object') return `${k}={ok}`
             return `${k}=${v}`
           }).join(', ')
-          console.log(`[${ts}] RESPONSE ${summary}`)
         }
+
+        // Log to ring buffer
+        logRequest({
+          operation: opName,
+          type: opType,
+          userId,
+          scenario,
+          status: hasErrors ? 'error' : 'ok',
+          durationMs,
+          variables: args.variableValues ?? {},
+          response: responseSummary,
+          errors: hasErrors ? result.errors.map(e => ({
+            message: e.message,
+            code: e.extensions?.code,
+            httpStatus: e.extensions?.http?.status,
+          })) : [],
+        })
+
+        if (hasErrors) {
+          result.errors.forEach(e => {
+            console.error(`[${ts}] ERROR    ${e.message} (${durationMs}ms)`)
+          })
+        }
+        console.log(`[${ts}] RESPONSE ${responseSummary} (${durationMs}ms)`)
       },
     },
   ],
@@ -449,6 +479,13 @@ function landingPage() {
       <tr><td><a href="/status">/status</a></td><td>GET</td><td>Resumo do estado atual do sandbox</td></tr>
       <tr><td><a href="/simulate-failures?rate=0.1">/simulate-failures?rate=N</a></td><td>GET</td><td>Habilita falhas simuladas (rate 0-1)</td></tr>
       <tr><td><a href="/simulate-failures?off">/simulate-failures?off</a></td><td>GET</td><td>Desabilita falhas simuladas</td></tr>
+      <tr><td><a href="/logs">/logs</a></td><td>GET</td><td>Ring buffer das &uacute;ltimas 500 requests (filtros: operation, type, user, status)</td></tr>
+      <tr><td><a href="/logs?stats">/logs?stats</a></td><td>GET</td><td>Estat&iacute;sticas de requests (top operations, users, errors)</td></tr>
+      <tr><td><a href="/logs?clear">/logs?clear</a></td><td>GET</td><td>Limpa o buffer de logs</td></tr>
+      <tr><td><a href="/scenarios?list">/scenarios?list</a></td><td>GET</td><td>Lista cen&aacute;rios dispon&iacute;veis e ativos</td></tr>
+      <tr><td><a href="/scenarios?set=pix_insufficient_balance">/scenarios?set=NAME</a></td><td>GET</td><td>Ativa um cen&aacute;rio de teste</td></tr>
+      <tr><td><a href="/scenarios?clear">/scenarios?clear</a></td><td>GET</td><td>Desativa todos os cen&aacute;rios</td></tr>
+      <tr><td><a href="/profiles">/profiles</a></td><td>GET</td><td>Lista todos os perfis de teste e jornadas mapeadas</td></tr>
     </table>
 
     <h2>Credenciais de Teste</h2>
@@ -552,9 +589,11 @@ const server = createServer((req, res) => {
   // ─── Reset endpoint ────────────────────────────────────────────
   if (req.method === 'GET' && req.url === '/reset') {
     reset()
+    clearLogs()
+    clearScenarios()
     lastResetAt = Date.now()
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
-    res.end(JSON.stringify({ success: true, message: 'State reset to seed data' }))
+    res.end(JSON.stringify({ success: true, message: 'State + logs + scenarios reset to seed data' }))
     return
   }
 
@@ -608,6 +647,107 @@ const server = createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
       res.end(JSON.stringify({ success: true, failureMode: getFailureMode() }))
     }
+    return
+  }
+
+  // ─── Logs endpoint (ring buffer — last 500 requests) ───────────
+  if (req.method === 'GET' && req.url?.startsWith('/logs')) {
+    const url = new URL(req.url, `http://localhost:${PORT}`)
+    const limit = parseInt(url.searchParams.get('limit') ?? '50')
+    const offset = parseInt(url.searchParams.get('offset') ?? '0')
+    const operation = url.searchParams.get('operation') ?? undefined
+    const type = url.searchParams.get('type') ?? undefined
+    const user = url.searchParams.get('user') ?? undefined
+    const status = url.searchParams.get('status') ?? undefined
+
+    if (url.searchParams.has('clear')) {
+      clearLogs()
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
+      res.end(JSON.stringify({ success: true, message: 'Logs cleared' }))
+      return
+    }
+
+    if (url.searchParams.has('stats')) {
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
+      res.end(JSON.stringify(getLogStats()))
+      return
+    }
+
+    const result = getLogs({ limit, offset, operation, type, user, status })
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
+    res.end(JSON.stringify(result))
+    return
+  }
+
+  // ─── Scenarios endpoint (control mock behavior) ────────────────
+  if (req.method === 'GET' && req.url?.startsWith('/scenarios')) {
+    const url = new URL(req.url, `http://localhost:${PORT}`)
+
+    if (url.searchParams.has('clear')) {
+      clearScenarios()
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
+      res.end(JSON.stringify({ success: true, message: 'All scenarios cleared' }))
+      return
+    }
+
+    if (url.searchParams.has('set')) {
+      const key = url.searchParams.get('set')
+      const scenario = TEST_SCENARIOS[key]
+      if (!scenario) {
+        res.writeHead(404, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
+        res.end(JSON.stringify({ error: `Unknown scenario: ${key}`, available: Object.keys(TEST_SCENARIOS) }))
+        return
+      }
+      setScenario(key, scenario)
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
+      res.end(JSON.stringify({ success: true, scenario: key, config: scenario }))
+      return
+    }
+
+    if (url.searchParams.has('list')) {
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
+      res.end(JSON.stringify({ available: TEST_SCENARIOS, active: getActiveScenarios() }))
+      return
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
+    res.end(JSON.stringify({ active: getActiveScenarios() }))
+    return
+  }
+
+  // ─── Profiles endpoint (list all test users) ──────────────────
+  if (req.method === 'GET' && req.url === '/profiles') {
+    const users = getStateSummary()
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
+    res.end(JSON.stringify({
+      profiles: [
+        { id: 1, name: 'Lucas Oliveira', cpf: '61151275131', password: 'Origami1', role: 'Principal (8 wallets, 3+ cards)', token: 'origami-mock-1' },
+        { id: 2, name: 'Maria Santos', cpf: '72253325031', password: 'Origami2!', role: 'Gerente RH', token: 'origami-mock-2' },
+        { id: 3, name: 'João Pedro', cpf: '85310785043', password: 'Origami3!', role: 'Analista Financeiro', token: 'origami-mock-3' },
+        { id: 4, name: 'Carlos Eduardo', cpf: '71965103561', password: null, role: 'Primeiro acesso (sem senha)', token: 'origami-mock-4-first-access' },
+        { id: 5, name: 'Ana Carolina', cpf: '80587310057', password: 'Origami5!', role: '2 tentativas falhas', token: 'origami-mock-5' },
+        { id: 6, name: 'Roberto Almeida', cpf: '76127261066', password: 'Origami6!', role: 'Bloqueio definitivo (403)', token: null },
+        { id: 7, name: 'Fernanda Rocha', cpf: '66392332154', password: 'Origami7!', role: 'Estagiária (saldo baixo)', token: 'origami-mock-7' },
+        { id: 8, name: 'Diego Nascimento', cpf: '46881973659', password: 'Origami8!', role: 'Executivo (7 wallets, 4 cards)', token: 'origami-mock-8' },
+        { id: 9, name: 'Patrícia Vieira', cpf: '99356327254', password: 'Origami9!', role: 'Bloqueio temporário (4 tentativas)', token: 'origami-mock-9' },
+        { id: 10, name: 'Thiago Martins', cpf: '95181756085', password: null, role: 'Primeiro acesso (sem senha)', token: 'origami-mock-10-first-access' },
+        { id: 11, name: 'Juliana Campos', cpf: '48063581776', password: 'Origami11!', role: 'Saldo quase zerado', token: 'origami-mock-11' },
+        { id: 12, name: 'Rafael Souza', cpf: '83970523214', password: 'Origami12!', role: 'Desligado (403)', token: null },
+      ],
+      journeys: {
+        'login_success': { profiles: [1,2,3,5,7,8,9,11], description: 'Login com sucesso' },
+        'login_blocked': { profiles: [6,12], description: 'Login bloqueado (403)' },
+        'first_access': { profiles: [4,10], description: 'Primeiro acesso (sem senha)' },
+        'pix_transfer': { profiles: [1,2,3,8], description: 'PIX transfer com saldo' },
+        'pix_no_balance': { profiles: [7,11], description: 'PIX com saldo insuficiente (422)' },
+        'card_management': { profiles: [1,8], description: 'Gerenciar cartões (bloquear/desbloquear/PIN)' },
+        'hr_clock_in': { profiles: [1,2,3,7,8], description: 'Bater ponto' },
+        'credit_simulation': { profiles: [1,2,3,8], description: 'Simular crédito consignado' },
+        'travel_management': { profiles: [1,2,3,8], description: 'Gerenciar viagens' },
+        'approvals': { profiles: [2], description: 'Aprovar/rejeitar solicitações (gerente)' },
+        'full_journey': { profiles: [1], description: 'Jornada completa (todas as features)' },
+      },
+    }))
     return
   }
 
