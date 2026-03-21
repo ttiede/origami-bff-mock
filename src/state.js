@@ -195,6 +195,10 @@ export function reset() {
   _mutations.lastMutation = null
   _mutations.lastMutationAt = null
 
+  // Clear rate limiting state (failed login/OTP/PIN attempts)
+  Object.keys(_failedAttempts).forEach(k => delete _failedAttempts[k])
+  Object.keys(_dailyTotals).forEach(k => delete _dailyTotals[k])
+
   console.log(`[${ts()}] STATE    Reset to seed data — all state cleared`)
 }
 
