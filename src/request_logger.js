@@ -116,3 +116,4 @@ export const TEST_SCENARIOS = {
   empty_notifications: { description: 'No notifications', emptyData: ['notifications'] },
   empty_all: { description: 'All data empty', emptyData: ['wallets', 'cards', 'notifications', 'transactions'] },
 }
+// deploy trigger 1774067711
