@@ -38,9 +38,10 @@ const yoga = createYoga({
     error: (...args) => console.error('[ERROR]', ...args),
   },
   plugins: [
-    {
-      // Module-level state to pass between onExecute and onExecuteDone
-      _lastRequest: null,
+    (() => {
+      // Closure to share state between onExecute and onExecuteDone
+      let _lastReq = null
+      return {
 
       onExecute({ args }) {
         const startMs = Date.now()
@@ -61,14 +62,13 @@ const yoga = createYoga({
           ? ` vars=${JSON.stringify(args.variableValues)}`
           : ''
 
-        // Store for duration calculation in onExecuteDone
-        this._lastRequest = { startMs, opName, opType, userId, scenario }
+        _lastReq = { startMs, opName, opType, userId, scenario }
 
         console.log(`[${ts}] ${opType.toUpperCase().padEnd(8)} ${opName.padEnd(35)} | user:${userId}${scenario ? ` scenario:${scenario}` : ''}${vars}`)
       },
       onExecuteDone({ result }) {
         const ts = new Date().toISOString().slice(11, 23)
-        const { startMs, opName, opType, userId, scenario } = this._lastRequest ?? {}
+        const { startMs, opName, opType, userId, scenario } = _lastReq ?? {}
         const durationMs = startMs ? Date.now() - startMs : 0
         const hasErrors = result?.errors?.length > 0
 
@@ -109,7 +109,7 @@ const yoga = createYoga({
         }
         console.log(`[${ts}] RESPONSE ${responseSummary} (${durationMs}ms)`)
       },
-    },
+    }})(),
   ],
 })
 
