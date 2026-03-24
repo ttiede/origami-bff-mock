@@ -9,7 +9,7 @@ const NOW = () => new Date().toISOString()
 
 // ─── Users (12) ─────────────────────────────────────────────────────────────
 export const SEED_USERS = [
-  { id: '1', nome: 'Lucas Oliveira Silva', cpf: '61151275131', email: 'lucas.silva@techsolutions.com.br', telefone: '(11) 99876-5432', empresa: 'Tech Solutions Ltda', departamento: 'Tecnologia', cargo: 'Desenvolvedor Senior', senha: 'Origami1!', primeiroAcesso: false, bloqueioDefinitivo: false, tentativasFalhas: 0 },
+  { id: '1', nome: 'Lucas Oliveira Silva', cpf: '61151275131', email: 'lucas.silva@techsolutions.com.br', telefone: '(11) 99876-5432', empresa: 'Tech Solutions Ltda', departamento: 'Tecnologia', cargo: 'Desenvolvedor Senior', senha: 'Origami1', primeiroAcesso: false, bloqueioDefinitivo: false, tentativasFalhas: 0 },
   { id: '2', nome: 'Maria Santos Ferreira', cpf: '72253325031', email: 'maria.ferreira@industriaabc.com.br', telefone: '(21) 98765-4321', empresa: 'Indústria ABC S.A.', departamento: 'Recursos Humanos', cargo: 'Gerente de RH', senha: 'Origami2!', primeiroAcesso: false, bloqueioDefinitivo: false, tentativasFalhas: 0 },
   { id: '3', nome: 'João Pedro Costa', cpf: '85310785043', email: 'joao.costa@comercioxyz.com.br', telefone: '(31) 97654-3210', empresa: 'Comércio XYZ Ltda', departamento: 'Financeiro', cargo: 'Analista Financeiro', senha: 'Origami3!', primeiroAcesso: false, bloqueioDefinitivo: false, tentativasFalhas: 0 },
   { id: '4', nome: 'Carlos Eduardo Mendes', cpf: '71965103561', email: 'carlos.mendes@techsolutions.com.br', telefone: '(11) 96543-2109', empresa: 'Tech Solutions Ltda', departamento: 'Produto', cargo: 'Product Manager', senha: null, primeiroAcesso: true, bloqueioDefinitivo: false, tentativasFalhas: 0 },
