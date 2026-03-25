@@ -1,7 +1,12 @@
 import { createServer } from 'node:http'
 import { createSchema, createYoga } from 'graphql-yoga'
 import { typeDefs } from './schema.js'
-import { resolvers } from './resolvers.js'
+import { resolvers, additionalResolvers } from './resolvers.js'
+
+// Merge additional resolvers into main resolvers
+if (additionalResolvers?.Query) {
+  Object.assign(resolvers.Query, additionalResolvers.Query)
+}
 import { reset, getStateSummary, getMutationStats, setFailureMode, getFailureMode } from './state.js'
 import { logRequest, getLogs, clearLogs, getLogStats, getActiveScenarios, setScenario, clearScenarios, getScenario, TEST_SCENARIOS } from './request_logger.js'
 

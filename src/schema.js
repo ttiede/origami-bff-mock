@@ -258,6 +258,21 @@ export const typeDefs = /* GraphQL */ `
     getEvents(month: Int!, year: Int!): [HrEvent!]!
     clockLocks: [ClockLock!]!
 
+    # Banks (for TED/Cash Out)
+    banks: [Bank!]!
+
+    # Mobile Carriers (for Recharge)
+    mobileCarriers: [MobileCarrier!]!
+
+    # Marketplace / Clube de Vantagens
+    marketplaceOffers: [MarketplaceOffer!]!
+
+    # Savings Goals
+    savingsGoals: [SavingsGoal!]!
+
+    # Transport Cards
+    transportCards: [TransportCard!]!
+
     # Credit
     requiredCreditFiles(type: String!): [RequiredFile!]!
     loans: [Loan!]!
@@ -977,5 +992,53 @@ export const typeDefs = /* GraphQL */ `
     maxHotelNight: Float!
     requiresPreApproval: Boolean!
     advanceDays: Int!
+  }
+
+  # ─── Banks ───────────────────────────────────────────────────────────
+  type Bank {
+    code: String!
+    name: String!
+    ispb: String
+  }
+
+  # ─── Mobile Carriers ────────────────────────────────────────────────
+  type MobileCarrier {
+    id: ID!
+    name: String!
+    icon: String
+    amounts: [Float!]!
+  }
+
+  # ─── Marketplace / Clube de Vantagens ───────────────────────────────
+  type MarketplaceOffer {
+    id: ID!
+    merchantName: String!
+    category: String!
+    discount: String!
+    description: String
+    couponCode: String
+    validUntil: String
+    imageUrl: String
+  }
+
+  # ─── Savings Goals ──────────────────────────────────────────────────
+  type SavingsGoal {
+    id: ID!
+    name: String!
+    targetAmount: Float!
+    currentAmount: Float!
+    deadline: String
+    walletId: ID
+    createdAt: String!
+  }
+
+  # ─── Transport Cards ───────────────────────────────────────────────
+  type TransportCard {
+    id: ID!
+    type: String!
+    number: String!
+    balance: Float!
+    lastUsed: String
+    status: String!
   }
 `

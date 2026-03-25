@@ -1654,3 +1654,53 @@ export const resolvers = {
     },
   },
 }
+
+// ── Additional Query resolvers (appended to main resolvers) ─────────
+// These are merged into the Query object at server startup.
+export const additionalResolvers = {
+  Query: {
+    banks: () => [
+      { code: '001', name: 'Banco do Brasil', ispb: '00000000' },
+      { code: '033', name: 'Santander', ispb: '90400888' },
+      { code: '104', name: 'Caixa Econômica Federal', ispb: '00360305' },
+      { code: '237', name: 'Bradesco', ispb: '60746948' },
+      { code: '341', name: 'Itaú Unibanco', ispb: '60701190' },
+      { code: '260', name: 'Nu Pagamentos (Nubank)', ispb: '18236120' },
+      { code: '077', name: 'Banco Inter', ispb: '00416968' },
+      { code: '336', name: 'C6 Bank', ispb: '31872495' },
+      { code: '290', name: 'PagSeguro (PagBank)', ispb: '08561701' },
+      { code: '380', name: 'PicPay', ispb: '22896431' },
+    ],
+
+    mobileCarriers: () => [
+      { id: 'vivo', name: 'Vivo', icon: 'phone_android', amounts: [10, 15, 20, 30, 50, 100] },
+      { id: 'claro', name: 'Claro', icon: 'phone_iphone', amounts: [10, 15, 20, 30, 50, 100] },
+      { id: 'tim', name: 'TIM', icon: 'sim_card', amounts: [10, 15, 20, 25, 30, 50] },
+      { id: 'oi', name: 'Oi', icon: 'wifi', amounts: [10, 15, 20, 30, 50] },
+    ],
+
+    marketplaceOffers: () => [
+      { id: 'mk-001', merchantName: 'iFood', category: 'alimentacao', discount: '30% OFF', description: 'Primeira compra no iFood Benefícios', couponCode: 'ORIGAMI30', validUntil: '2026-06-30', imageUrl: null },
+      { id: 'mk-002', merchantName: 'Cinemark', category: 'cultura', discount: '2x1', description: 'Compre 1 ingresso, ganhe outro. Seg a Qui.', couponCode: 'CINE2X1', validUntil: '2026-05-31', imageUrl: null },
+      { id: 'mk-003', merchantName: 'Drogaria Raia', category: 'saude', discount: '20% OFF', description: 'Desconto em medicamentos genéricos', couponCode: 'RAIA20', validUntil: '2026-04-30', imageUrl: null },
+      { id: 'mk-004', merchantName: 'Uber', category: 'mobilidade', discount: 'R$10 OFF', description: 'Desconto na próxima corrida', couponCode: 'UBER10ORI', validUntil: '2026-04-15', imageUrl: null },
+      { id: 'mk-005', merchantName: 'Amazon', category: 'compras', discount: '15% OFF', description: 'Livros e eletrônicos selecionados', couponCode: 'AMZ15ORIG', validUntil: '2026-05-15', imageUrl: null },
+      { id: 'mk-006', merchantName: 'Smart Fit', category: 'saude', discount: '1 mês grátis', description: 'Primeira mensalidade gratuita para novos', couponCode: 'SMARTFREE', validUntil: '2026-06-30', imageUrl: null },
+      { id: 'mk-007', merchantName: 'Rappi', category: 'alimentacao', discount: 'Frete Grátis', description: 'Frete grátis em pedidos acima de R$30', couponCode: 'RAPPIFREE', validUntil: '2026-04-30', imageUrl: null },
+      { id: 'mk-008', merchantName: 'Livraria Cultura', category: 'cultura', discount: '25% OFF', description: 'Livros de tecnologia e negócios', couponCode: 'LIV25TECH', validUntil: '2026-05-31', imageUrl: null },
+      { id: 'mk-009', merchantName: 'Netflix', category: 'entretenimento', discount: 'R$15 OFF', description: 'Desconto na assinatura mensal', couponCode: 'NFLX15ORI', validUntil: '2026-07-31', imageUrl: null },
+      { id: 'mk-010', merchantName: 'Gympass', category: 'saude', discount: '50% OFF', description: 'Primeira mensalidade com 50% de desconto', couponCode: 'GYM50ORIG', validUntil: '2026-06-30', imageUrl: null },
+    ],
+
+    savingsGoals: () => [
+      { id: 'sg-001', name: 'Viagem de Férias', targetAmount: 2000, currentAmount: 500, deadline: '2026-07-01', walletId: 'w1', createdAt: '2026-01-15T10:00:00Z' },
+      { id: 'sg-002', name: 'Reserva de Emergência', targetAmount: 5000, currentAmount: 1200, deadline: '2026-12-31', walletId: 'w2', createdAt: '2026-02-01T10:00:00Z' },
+      { id: 'sg-003', name: 'Curso de Inglês', targetAmount: 800, currentAmount: 320, deadline: '2026-06-01', walletId: 'w7', createdAt: '2026-03-01T10:00:00Z' },
+    ],
+
+    transportCards: () => [
+      { id: 'tc-001', type: 'bilhete_unico', number: '7891 **** **** 5502', balance: 42.50, lastUsed: '2026-03-23T08:15:00Z', status: 'ativo' },
+      { id: 'tc-002', type: 'bom', number: '6012 **** **** 3301', balance: 15.00, lastUsed: '2026-03-20T17:30:00Z', status: 'ativo' },
+    ],
+  },
+}
