@@ -33,7 +33,7 @@ import {
   addToDigitalWallet, removeFromDigitalWallet,
   activateBenefit, redeemReward, reclassifyTransaction,
   trackLogin, trackLogout,
-  updateUserPassword, resetFailedAttempts,
+  updateUserPassword, validateUserPassword, updateUserProfile, resetFailedAttempts,
   shouldSimulateFailure,
   // HR
   getClockEntries, getHourBank, getVacationBalance, getVacationHistory,
@@ -44,6 +44,11 @@ import {
   // Travel
   getTravels, getTravelById, getTravelPolicy,
   addTravel, updateTravelStatus, removeTravel, addTravelExpense,
+  storeTravelExpense, getTravelExpenses,
+  // New endpoint getters
+  getBanks, getMobileCarriers, getMarketplaceOffers, getSavingsGoals, getTransportCards,
+  // Transaction PIN
+  setTransactionPin as storeTransactionPin, getTransactionPin,
   // Rate limiting & daily totals
   trackFailedAttempt, isRateLimited, clearFailedAttempts,
   getDailyTotal, addToDailyTotal, getDailyLimit,
@@ -268,8 +273,9 @@ export const resolvers = {
       return getCards(uid(context)).map(({ pin, ...c }) => c)
     },
 
-    cardDelivery: (_, { id: cardId }) => {
-      const delivery = getCardDelivery(cardId)
+    cardDelivery: (_, { id: cardId }, context) => {
+      const userId = uid(context)
+      const delivery = getCardDelivery(cardId, userId)
       if (delivery) return delivery
       // Fallback for cards without seed delivery data
       return {
@@ -614,6 +620,13 @@ export const resolvers = {
       if (input.newPassword.length < 8) {
         throw gqlError('A nova senha deve ter no mínimo 8 caracteres.', 'BAD_REQUEST', 400)
       }
+      // Validate current password
+      if (input.currentPassword && !validateUserPassword(input.cpf, input.currentPassword)) {
+        throw gqlError('Senha atual incorreta.', 'UNAUTHORIZED', 401)
+      }
+      if (input.newPassword === input.currentPassword) {
+        throw gqlError('A nova senha deve ser diferente da senha atual.', 'BAD_REQUEST', 400)
+      }
       updateUserPassword(input.cpf, input.newPassword)
       logMutation('updatePassword', `cpf:${input.cpf}`)
       return ok()
@@ -635,21 +648,29 @@ export const resolvers = {
       return ok()
     },
 
-    setTransactionPin: (_, __, context) => {
-      requireAuth(context)
+    setTransactionPin: (_, { pin }, context) => {
+      const userId = requireAuth(context)
+      if (!pin || pin.length < 4) {
+        throw gqlError('O PIN deve ter no mínimo 4 dígitos.', 'BAD_REQUEST', 400)
+      }
+      storeTransactionPin(userId, pin)
+      logMutation('setTransactionPin', `user:${userId} → PIN set`)
       return ok()
     },
 
     validateTransactionPin: (_, { pin }, context) => {
-      requireAuth(context)
-      const rateLimitKey = `txpin:${uid(context)}`
+      const userId = requireAuth(context)
+      const rateLimitKey = `txpin:${userId}`
       if (isRateLimited(rateLimitKey)) {
         throw gqlError(
           'Muitas tentativas de PIN. Aguarde 15 minutos.',
           'RATE_LIMITED', 429
         )
       }
-      if (pin !== VALID_TX_PIN) {
+      // Check user's stored PIN first, fall back to default valid PIN
+      const storedPin = getTransactionPin(userId)
+      const validPin = storedPin ?? VALID_TX_PIN
+      if (pin !== validPin) {
         trackFailedAttempt(rateLimitKey)
         throw gqlError('PIN de transação incorreto.', 'UNAUTHORIZED', 401)
       }
@@ -1632,25 +1653,48 @@ export const resolvers = {
     },
 
     // ── Missing Mutation resolvers ──────────────────────────────
-    discardClockEntry: (_, { id }) => {
-      return discardClockEntry(id);
+    discardClockEntry: (_, { id }, context) => {
+      requireAuth(context)
+      const result = discardClockEntry(id)
+      if (!result) throw gqlError(`Registro de ponto '${id}' não encontrado.`, 'NOT_FOUND', 404)
+      logMutation('discardClockEntry', `clk:${id} → discarded`)
+      return result
     },
 
-    restoreClockEntry: (_, { id }) => {
-      return restoreClockEntry(id);
+    restoreClockEntry: (_, { id }, context) => {
+      requireAuth(context)
+      const result = restoreClockEntry(id)
+      if (!result) throw gqlError(`Registro de ponto '${id}' não encontrado.`, 'NOT_FOUND', 404)
+      logMutation('restoreClockEntry', `clk:${id} → restored`)
+      return result
     },
 
-    uploadCreditFile: (_, { loanId, fileType, fileName }) => ({
-      id: `file-${Date.now()}`,
-      type: fileType,
-      label: fileName,
-      description: `Uploaded ${fileName}`,
-      required: true,
-      accepted: false,
-    }),
+    uploadCreditFile: (_, { loanId, fileType, fileName }, context) => {
+      requireAuth(context)
+      if (!loanId) throw gqlError('loanId é obrigatório.', 'BAD_REQUEST', 400)
+      if (!fileType) throw gqlError('fileType é obrigatório.', 'BAD_REQUEST', 400)
+      if (!fileName) throw gqlError('fileName é obrigatório.', 'BAD_REQUEST', 400)
+      logMutation('uploadCreditFile', `loan:${loanId} | ${fileType}: ${fileName}`)
+      return {
+        id: `file-${Date.now()}`,
+        type: fileType,
+        label: fileName,
+        description: `Uploaded ${fileName}`,
+        required: true,
+        accepted: false,
+      }
+    },
 
-    addTravelExpense: (_, { travelId, type, description, amount, date }) => {
-      return addTravelExpense(travelId, { type, description, amount, date });
+    addTravelExpense: (_, { travelId, type, description, amount, date }, context) => {
+      requireAuth(context)
+      if (!travelId) throw gqlError('travelId é obrigatório.', 'BAD_REQUEST', 400)
+      if (!amount || amount <= 0) throw gqlError('Valor deve ser maior que zero.', 'BAD_REQUEST', 400)
+      const travel = getTravelById(travelId)
+      if (!travel) throw gqlError(`Viagem '${travelId}' não encontrada.`, 'NOT_FOUND', 404)
+      const expense = addTravelExpense(travelId, { type, description, amount, date })
+      storeTravelExpense(expense)
+      logMutation('addTravelExpense', `trv:${travelId} | ${type} R$${amount}`)
+      return expense
     },
   },
 }
@@ -1659,48 +1703,10 @@ export const resolvers = {
 // These are merged into the Query object at server startup.
 export const additionalResolvers = {
   Query: {
-    banks: () => [
-      { code: '001', name: 'Banco do Brasil', ispb: '00000000' },
-      { code: '033', name: 'Santander', ispb: '90400888' },
-      { code: '104', name: 'Caixa Econômica Federal', ispb: '00360305' },
-      { code: '237', name: 'Bradesco', ispb: '60746948' },
-      { code: '341', name: 'Itaú Unibanco', ispb: '60701190' },
-      { code: '260', name: 'Nu Pagamentos (Nubank)', ispb: '18236120' },
-      { code: '077', name: 'Banco Inter', ispb: '00416968' },
-      { code: '336', name: 'C6 Bank', ispb: '31872495' },
-      { code: '290', name: 'PagSeguro (PagBank)', ispb: '08561701' },
-      { code: '380', name: 'PicPay', ispb: '22896431' },
-    ],
-
-    mobileCarriers: () => [
-      { id: 'vivo', name: 'Vivo', icon: 'phone_android', amounts: [10, 15, 20, 30, 50, 100] },
-      { id: 'claro', name: 'Claro', icon: 'phone_iphone', amounts: [10, 15, 20, 30, 50, 100] },
-      { id: 'tim', name: 'TIM', icon: 'sim_card', amounts: [10, 15, 20, 25, 30, 50] },
-      { id: 'oi', name: 'Oi', icon: 'wifi', amounts: [10, 15, 20, 30, 50] },
-    ],
-
-    marketplaceOffers: () => [
-      { id: 'mk-001', merchantName: 'iFood', category: 'alimentacao', discount: '30% OFF', description: 'Primeira compra no iFood Benefícios', couponCode: 'ORIGAMI30', validUntil: '2026-06-30', imageUrl: null },
-      { id: 'mk-002', merchantName: 'Cinemark', category: 'cultura', discount: '2x1', description: 'Compre 1 ingresso, ganhe outro. Seg a Qui.', couponCode: 'CINE2X1', validUntil: '2026-05-31', imageUrl: null },
-      { id: 'mk-003', merchantName: 'Drogaria Raia', category: 'saude', discount: '20% OFF', description: 'Desconto em medicamentos genéricos', couponCode: 'RAIA20', validUntil: '2026-04-30', imageUrl: null },
-      { id: 'mk-004', merchantName: 'Uber', category: 'mobilidade', discount: 'R$10 OFF', description: 'Desconto na próxima corrida', couponCode: 'UBER10ORI', validUntil: '2026-04-15', imageUrl: null },
-      { id: 'mk-005', merchantName: 'Amazon', category: 'compras', discount: '15% OFF', description: 'Livros e eletrônicos selecionados', couponCode: 'AMZ15ORIG', validUntil: '2026-05-15', imageUrl: null },
-      { id: 'mk-006', merchantName: 'Smart Fit', category: 'saude', discount: '1 mês grátis', description: 'Primeira mensalidade gratuita para novos', couponCode: 'SMARTFREE', validUntil: '2026-06-30', imageUrl: null },
-      { id: 'mk-007', merchantName: 'Rappi', category: 'alimentacao', discount: 'Frete Grátis', description: 'Frete grátis em pedidos acima de R$30', couponCode: 'RAPPIFREE', validUntil: '2026-04-30', imageUrl: null },
-      { id: 'mk-008', merchantName: 'Livraria Cultura', category: 'cultura', discount: '25% OFF', description: 'Livros de tecnologia e negócios', couponCode: 'LIV25TECH', validUntil: '2026-05-31', imageUrl: null },
-      { id: 'mk-009', merchantName: 'Netflix', category: 'entretenimento', discount: 'R$15 OFF', description: 'Desconto na assinatura mensal', couponCode: 'NFLX15ORI', validUntil: '2026-07-31', imageUrl: null },
-      { id: 'mk-010', merchantName: 'Gympass', category: 'saude', discount: '50% OFF', description: 'Primeira mensalidade com 50% de desconto', couponCode: 'GYM50ORIG', validUntil: '2026-06-30', imageUrl: null },
-    ],
-
-    savingsGoals: () => [
-      { id: 'sg-001', name: 'Viagem de Férias', targetAmount: 2000, currentAmount: 500, deadline: '2026-07-01', walletId: 'w1', createdAt: '2026-01-15T10:00:00Z' },
-      { id: 'sg-002', name: 'Reserva de Emergência', targetAmount: 5000, currentAmount: 1200, deadline: '2026-12-31', walletId: 'w2', createdAt: '2026-02-01T10:00:00Z' },
-      { id: 'sg-003', name: 'Curso de Inglês', targetAmount: 800, currentAmount: 320, deadline: '2026-06-01', walletId: 'w7', createdAt: '2026-03-01T10:00:00Z' },
-    ],
-
-    transportCards: () => [
-      { id: 'tc-001', type: 'bilhete_unico', number: '7891 **** **** 5502', balance: 42.50, lastUsed: '2026-03-23T08:15:00Z', status: 'ativo' },
-      { id: 'tc-002', type: 'bom', number: '6012 **** **** 3301', balance: 15.00, lastUsed: '2026-03-20T17:30:00Z', status: 'ativo' },
-    ],
+    banks: () => getBanks(),
+    mobileCarriers: () => getMobileCarriers(),
+    marketplaceOffers: () => getMarketplaceOffers(),
+    savingsGoals: () => getSavingsGoals(),
+    transportCards: () => getTransportCards(),
   },
 }

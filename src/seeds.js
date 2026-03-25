@@ -465,6 +465,41 @@ export function buildSeedSessions() {
       { id: 'sess-2', deviceName: 'Chrome - Windows', deviceType: 'Web', location: 'São Paulo, SP', lastActive: d(2), isCurrent: false },
       { id: 'sess-3', deviceName: 'iPhone 14', deviceType: 'iOS', location: 'Rio de Janeiro, RJ', lastActive: dDays(3), isCurrent: false },
     ],
+    '2': [
+      { id: 'sess-1', deviceName: 'iPhone 15 Pro', deviceType: 'iOS', location: 'Rio de Janeiro, RJ', lastActive: NOW(), isCurrent: true },
+      { id: 'sess-2', deviceName: 'Safari - MacBook', deviceType: 'Web', location: 'Rio de Janeiro, RJ', lastActive: d(12), isCurrent: false },
+    ],
+    '3': [
+      { id: 'sess-1', deviceName: 'Motorola Edge 40', deviceType: 'Android', location: 'Belo Horizonte, MG', lastActive: NOW(), isCurrent: true },
+    ],
+    '4': [
+      { id: 'sess-1', deviceName: 'Samsung Galaxy S24', deviceType: 'Android', location: 'São Paulo, SP', lastActive: NOW(), isCurrent: true },
+    ],
+    '5': [
+      { id: 'sess-1', deviceName: 'iPhone 14', deviceType: 'iOS', location: 'Rio de Janeiro, RJ', lastActive: NOW(), isCurrent: true },
+      { id: 'sess-2', deviceName: 'Chrome - Linux', deviceType: 'Web', location: 'Niterói, RJ', lastActive: dDays(1), isCurrent: false },
+    ],
+    '6': [
+      { id: 'sess-1', deviceName: 'Xiaomi Redmi Note 12', deviceType: 'Android', location: 'Belo Horizonte, MG', lastActive: dDays(30), isCurrent: false },
+    ],
+    '7': [
+      { id: 'sess-1', deviceName: 'Samsung Galaxy A14', deviceType: 'Android', location: 'São Paulo, SP', lastActive: NOW(), isCurrent: true },
+    ],
+    '8': [
+      { id: 'sess-1', deviceName: 'iPhone 15 Pro Max', deviceType: 'iOS', location: 'São Paulo, SP', lastActive: NOW(), isCurrent: true },
+      { id: 'sess-2', deviceName: 'iPad Pro 12.9', deviceType: 'iOS', location: 'São Paulo, SP', lastActive: d(4), isCurrent: false },
+      { id: 'sess-3', deviceName: 'Chrome - MacBook Pro', deviceType: 'Web', location: 'São Paulo, SP', lastActive: dDays(2), isCurrent: false },
+    ],
+    '9': [
+      { id: 'sess-1', deviceName: 'iPhone 13', deviceType: 'iOS', location: 'Rio de Janeiro, RJ', lastActive: dDays(1), isCurrent: false },
+    ],
+    '10': [
+      { id: 'sess-1', deviceName: 'Pixel 8 Pro', deviceType: 'Android', location: 'Florianópolis, SC', lastActive: NOW(), isCurrent: true },
+    ],
+    '11': [
+      { id: 'sess-1', deviceName: 'Samsung Galaxy A54', deviceType: 'Android', location: 'Campinas, SP', lastActive: NOW(), isCurrent: true },
+    ],
+    '12': [],
   }
 }
 
@@ -477,6 +512,53 @@ export function buildSeedSecurityActivity() {
       { id: 'sec-3', descricao: 'Biometria ativada', dispositivo: 'Samsung Galaxy A13', data: dDays(5), tipo: 'biometric' },
       { id: 'sec-4', descricao: 'Sessão encerrada remotamente', dispositivo: 'iPhone 14', data: dDays(7), tipo: 'session_terminate' },
       { id: 'sec-5', descricao: 'Tentativa de login com senha incorreta', dispositivo: 'Desconhecido', data: dDays(10), tipo: 'failed_login' },
+    ],
+    '2': [
+      { id: 'sec-1', descricao: 'Login realizado com sucesso', dispositivo: 'iPhone 15 Pro', data: NOW(), tipo: 'login' },
+      { id: 'sec-2', descricao: '2FA ativado', dispositivo: 'iPhone 15 Pro', data: dDays(2), tipo: '2fa_enabled' },
+      { id: 'sec-3', descricao: 'Aprovação de solicitação de saldo', dispositivo: 'Safari - MacBook', data: dDays(4), tipo: 'approval' },
+    ],
+    '3': [
+      { id: 'sec-1', descricao: 'Login realizado com sucesso', dispositivo: 'Motorola Edge 40', data: NOW(), tipo: 'login' },
+      { id: 'sec-2', descricao: 'PIN de transação configurado', dispositivo: 'Motorola Edge 40', data: dDays(15), tipo: 'pin_setup' },
+    ],
+    '5': [
+      { id: 'sec-1', descricao: 'Login realizado com sucesso', dispositivo: 'iPhone 14', data: NOW(), tipo: 'login' },
+      { id: 'sec-2', descricao: 'Tentativa de login com senha incorreta', dispositivo: 'Desconhecido', data: dDays(1), tipo: 'failed_login' },
+      { id: 'sec-3', descricao: 'Tentativa de login com senha incorreta', dispositivo: 'Desconhecido', data: dDays(1), tipo: 'failed_login' },
+      { id: 'sec-4', descricao: 'Login realizado com sucesso', dispositivo: 'iPhone 14', data: dDays(3), tipo: 'login' },
+    ],
+    '6': [
+      { id: 'sec-1', descricao: 'Conta bloqueada definitivamente — múltiplas tentativas incorretas', dispositivo: 'Desconhecido', data: dDays(30), tipo: 'account_blocked' },
+      { id: 'sec-2', descricao: 'Tentativa de login com senha incorreta (6x)', dispositivo: 'Desconhecido', data: dDays(30), tipo: 'failed_login' },
+      { id: 'sec-3', descricao: 'Login realizado com sucesso', dispositivo: 'Xiaomi Redmi Note 12', data: dDays(31), tipo: 'login' },
+    ],
+    '7': [
+      { id: 'sec-1', descricao: 'Login realizado com sucesso', dispositivo: 'Samsung Galaxy A14', data: NOW(), tipo: 'login' },
+      { id: 'sec-2', descricao: 'Documentos KYC enviados', dispositivo: 'Samsung Galaxy A14', data: dDays(3), tipo: 'kyc_submit' },
+    ],
+    '8': [
+      { id: 'sec-1', descricao: 'Login realizado com sucesso', dispositivo: 'iPhone 15 Pro Max', data: NOW(), tipo: 'login' },
+      { id: 'sec-2', descricao: 'Biometria facial configurada', dispositivo: 'iPhone 15 Pro Max', data: dDays(1), tipo: 'biometric' },
+      { id: 'sec-3', descricao: 'Novo dispositivo autorizado — iPad Pro', dispositivo: 'iPad Pro 12.9', data: dDays(7), tipo: 'device_authorized' },
+      { id: 'sec-4', descricao: 'Cartão adicionado ao Google Pay', dispositivo: 'Chrome - MacBook Pro', data: dDays(10), tipo: 'digital_wallet' },
+    ],
+    '9': [
+      { id: 'sec-1', descricao: 'Conta temporariamente bloqueada — 4 tentativas incorretas', dispositivo: 'Desconhecido', data: d(0.1), tipo: 'temp_block' },
+      { id: 'sec-2', descricao: 'Tentativa de login com senha incorreta', dispositivo: 'Desconhecido', data: d(0.5), tipo: 'failed_login' },
+      { id: 'sec-3', descricao: 'Tentativa de login com senha incorreta', dispositivo: 'Desconhecido', data: d(1), tipo: 'failed_login' },
+      { id: 'sec-4', descricao: 'Cartão Mastercard bloqueado por segurança', dispositivo: 'Sistema', data: dDays(1), tipo: 'card_blocked' },
+    ],
+    '10': [
+      { id: 'sec-1', descricao: 'Primeiro acesso — conta criada', dispositivo: 'Sistema', data: dDays(1), tipo: 'account_created' },
+    ],
+    '11': [
+      { id: 'sec-1', descricao: 'Login realizado com sucesso', dispositivo: 'Samsung Galaxy A54', data: NOW(), tipo: 'login' },
+      { id: 'sec-2', descricao: 'Tentativa de login com senha incorreta', dispositivo: 'Desconhecido', data: dDays(5), tipo: 'failed_login' },
+    ],
+    '12': [
+      { id: 'sec-1', descricao: 'Conta encerrada — desligamento', dispositivo: 'Sistema', data: dDays(45), tipo: 'account_terminated' },
+      { id: 'sec-2', descricao: 'Cartões cancelados', dispositivo: 'Sistema', data: dDays(45), tipo: 'cards_cancelled' },
     ],
   }
 }
@@ -659,6 +741,42 @@ export function buildSeedNextDeposits() {
       { walletId: 'w1', amount: 400.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Alimentação Estágio' },
       { walletId: 'w2', amount: 200.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Transporte Estágio' },
     ],
+    '4': [
+      { walletId: 'w1', amount: 500.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Flexível Tech' },
+      { walletId: 'w2', amount: 600.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Refeição' },
+      { walletId: 'w3', amount: 400.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Transporte' },
+      { walletId: 'w4', amount: 200.00, scheduledDate: dFuture(12).substring(0, 10), description: 'Crédito mensal — Cultura' },
+      { walletId: 'w5', amount: 350.00, scheduledDate: dFuture(12).substring(0, 10), description: 'Crédito mensal — Educação' },
+    ],
+    '5': [
+      { walletId: 'w1', amount: 800.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Flexível Premium' },
+    ],
+    '6': [
+      { walletId: 'w1', amount: 500.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Refeição' },
+      { walletId: 'w2', amount: 350.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Transporte' },
+      { walletId: 'w3', amount: 450.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Saúde' },
+      { walletId: 'w4', amount: 300.00, scheduledDate: dFuture(12).substring(0, 10), description: 'Crédito mensal — Home Office' },
+    ],
+    '8': [
+      { walletId: 'w1', amount: 1500.00, scheduledDate: dFuture(3).substring(0, 10), description: 'Crédito mensal — Alimentação Premium' },
+      { walletId: 'w2', amount: 1200.00, scheduledDate: dFuture(3).substring(0, 10), description: 'Crédito mensal — Refeição Executiva' },
+      { walletId: 'w3', amount: 800.00, scheduledDate: dFuture(3).substring(0, 10), description: 'Crédito mensal — Transporte Executivo' },
+      { walletId: 'w4', amount: 3000.00, scheduledDate: dFuture(10).substring(0, 10), description: 'Crédito mensal — Educação Continuada' },
+      { walletId: 'w5', amount: 2000.00, scheduledDate: dFuture(10).substring(0, 10), description: 'Crédito mensal — Home Office Premium' },
+      { walletId: 'w6', amount: 1000.00, scheduledDate: dFuture(10).substring(0, 10), description: 'Crédito mensal — Saúde & Bem-estar' },
+      { walletId: 'w7', amount: 600.00, scheduledDate: dFuture(10).substring(0, 10), description: 'Crédito mensal — Cultura & Lazer' },
+    ],
+    '9': [
+      { walletId: 'w1', amount: 500.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Refeição' },
+      { walletId: 'w2', amount: 600.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Flexível Jurídico' },
+      { walletId: 'w3', amount: 350.00, scheduledDate: dFuture(12).substring(0, 10), description: 'Crédito mensal — Saúde' },
+    ],
+    '10': [
+      { walletId: 'w1', amount: 700.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Alimentação' },
+      { walletId: 'w2', amount: 2000.00, scheduledDate: dFuture(5).substring(0, 10), description: 'Crédito mensal — Home Office Integral' },
+      { walletId: 'w3', amount: 1500.00, scheduledDate: dFuture(12).substring(0, 10), description: 'Crédito mensal — Educação Tech' },
+      { walletId: 'w4', amount: 400.00, scheduledDate: dFuture(12).substring(0, 10), description: 'Crédito mensal — Flexível RemoteTech' },
+    ],
     '11': [
       { walletId: 'w1', amount: 400.00, scheduledDate: dFuture(3).substring(0, 10), description: 'Crédito mensal — Flexível' },
       { walletId: 'w2', amount: 500.00, scheduledDate: dFuture(3).substring(0, 10), description: 'Crédito mensal — Refeição' },
@@ -704,6 +822,41 @@ export function buildSeedCardDeliveries() {
       trackingCode: '',
       estimatedDate: dFuture(10).substring(0, 10),
       deliveryAddress: 'Rua das Flores, 123 — São Paulo, SP',
+      events: [],
+    },
+    // User 4 (Carlos) — first access, pending card
+    '4:c1': {
+      cardId: 'c1',
+      status: 'processing',
+      carrier: 'Correios',
+      trackingCode: 'BR555666777BR',
+      estimatedDate: dFuture(8).substring(0, 10),
+      deliveryAddress: 'Av. Brigadeiro Faria Lima, 3477 — Itaim Bibi, SP',
+      events: [
+        { description: 'Cartão em produção', date: dDays(1), location: 'Barueri, SP' },
+      ],
+    },
+    // User 10 (Thiago) — first access, 2 pending cards
+    '10:c1': {
+      cardId: 'c1',
+      status: 'in_transit',
+      carrier: 'Correios',
+      trackingCode: 'BR111222333BR',
+      estimatedDate: dFuture(4).substring(0, 10),
+      deliveryAddress: 'R. Bocaiúva, 2468 — Centro, Florianópolis, SC',
+      events: [
+        { description: 'Objeto postado', date: dDays(3), location: 'Barueri, SP' },
+        { description: 'Em trânsito para a cidade de destino', date: dDays(2), location: 'Curitiba, PR' },
+        { description: 'Em trânsito', date: dDays(1), location: 'Florianópolis, SC' },
+      ],
+    },
+    '10:c2': {
+      cardId: 'c2',
+      status: 'processing',
+      carrier: 'Correios',
+      trackingCode: '',
+      estimatedDate: dFuture(12).substring(0, 10),
+      deliveryAddress: 'R. Bocaiúva, 2468 — Centro, Florianópolis, SC',
       events: [],
     },
   }
@@ -772,6 +925,66 @@ export function buildSeedKycResults() {
       submittedAt: dDays(5),
       reviewedAt: null,
     },
+    '2': {
+      id: 'kyc-002',
+      status: 'approved',
+      cpfValid: true,
+      documentValid: true,
+      certifaceScore: 0.97,
+      rejectionReason: null,
+      submittedAt: dDays(60),
+      reviewedAt: dDays(59),
+    },
+    '3': {
+      id: 'kyc-003',
+      status: 'approved',
+      cpfValid: true,
+      documentValid: true,
+      certifaceScore: 0.93,
+      rejectionReason: null,
+      submittedAt: dDays(45),
+      reviewedAt: dDays(44),
+    },
+    '5': {
+      id: 'kyc-005',
+      status: 'approved',
+      cpfValid: true,
+      documentValid: true,
+      certifaceScore: 0.91,
+      rejectionReason: null,
+      submittedAt: dDays(50),
+      reviewedAt: dDays(49),
+    },
+    '6': {
+      id: 'kyc-006',
+      status: 'approved',
+      cpfValid: true,
+      documentValid: true,
+      certifaceScore: 0.89,
+      rejectionReason: null,
+      submittedAt: dDays(90),
+      reviewedAt: dDays(89),
+    },
+    '8': {
+      id: 'kyc-008',
+      status: 'approved',
+      cpfValid: true,
+      documentValid: true,
+      certifaceScore: 0.99,
+      rejectionReason: null,
+      submittedAt: dDays(120),
+      reviewedAt: dDays(119),
+    },
+    '12': {
+      id: 'kyc-012',
+      status: 'expired',
+      cpfValid: true,
+      documentValid: true,
+      certifaceScore: 0.88,
+      rejectionReason: 'Conta encerrada — colaborador desligado',
+      submittedAt: dDays(180),
+      reviewedAt: dDays(179),
+    },
   }
 }
 
@@ -836,50 +1049,58 @@ export function buildSeedVacationHistory() {
   ]
 }
 
-// ─── Payslips (3 months) ────────────────────────────────────────────────────
+// ─── Payslips (2025 full year + 2026 Q1) ────────────────────────────────────
 export function buildSeedPayslips() {
-  return [
-    {
-      id: 'pay-202601', month: 1, year: 2026, grossSalary: 12500.00, netSalary: 9875.50,
-      deductions: [
-        { description: 'INSS', amount: 1051.20 },
-        { description: 'IRRF', amount: 1318.30 },
-        { description: 'Plano de Saúde', amount: 255.00 },
-      ],
-      benefits: [
-        { description: 'Vale Refeição', amount: 600.00 },
-        { description: 'Vale Transporte', amount: 400.00 },
-        { description: 'PLR Proporcional', amount: 1041.67 },
-      ],
-      pdfUrl: 'https://mock.origami.com.br/payslips/202601.pdf',
-    },
-    {
-      id: 'pay-202602', month: 2, year: 2026, grossSalary: 12500.00, netSalary: 9875.50,
-      deductions: [
-        { description: 'INSS', amount: 1051.20 },
-        { description: 'IRRF', amount: 1318.30 },
-        { description: 'Plano de Saúde', amount: 255.00 },
-      ],
-      benefits: [
-        { description: 'Vale Refeição', amount: 600.00 },
-        { description: 'Vale Transporte', amount: 400.00 },
-      ],
-      pdfUrl: 'https://mock.origami.com.br/payslips/202602.pdf',
-    },
-    {
-      id: 'pay-202603', month: 3, year: 2026, grossSalary: 12500.00, netSalary: 9875.50,
-      deductions: [
-        { description: 'INSS', amount: 1051.20 },
-        { description: 'IRRF', amount: 1318.30 },
-        { description: 'Plano de Saúde', amount: 255.00 },
-      ],
-      benefits: [
-        { description: 'Vale Refeição', amount: 600.00 },
-        { description: 'Vale Transporte', amount: 400.00 },
-      ],
-      pdfUrl: 'https://mock.origami.com.br/payslips/202603.pdf',
-    },
+  const baseDeductions = [
+    { description: 'INSS', amount: 1051.20 },
+    { description: 'IRRF', amount: 1318.30 },
+    { description: 'Plano de Saúde', amount: 255.00 },
   ]
+  const baseBenefits = [
+    { description: 'Vale Refeição', amount: 600.00 },
+    { description: 'Vale Transporte', amount: 400.00 },
+  ]
+  const payslips = []
+
+  // 2025 — full year (12 months)
+  for (let m = 1; m <= 12; m++) {
+    const extra = m === 6 ? [{ description: 'Férias (1/3)', amount: 4166.67 }] :
+                  m === 11 ? [{ description: '13º Salário (1ª parcela)', amount: 6250.00 }] :
+                  m === 12 ? [{ description: '13º Salário (2ª parcela)', amount: 4847.50 }] :
+                  m === 1 ? [{ description: 'PLR Proporcional', amount: 1041.67 }] : []
+    const extraDeductions = m === 12 ? [{ description: 'IRRF 13º', amount: 1402.50 }] : []
+    payslips.push({
+      id: `pay-2025${String(m).padStart(2, '0')}`,
+      month: m, year: 2025,
+      grossSalary: 12500.00 + extra.reduce((s, e) => s + e.amount, 0),
+      netSalary: 12500.00 + extra.reduce((s, e) => s + e.amount, 0) - 2624.50 - extraDeductions.reduce((s, e) => s + e.amount, 0),
+      deductions: [...baseDeductions, ...extraDeductions],
+      benefits: [...baseBenefits, ...extra],
+      pdfUrl: `https://mock.origami.com.br/payslips/2025${String(m).padStart(2, '0')}.pdf`,
+    })
+  }
+
+  // 2026 — January to March
+  payslips.push({
+    id: 'pay-202601', month: 1, year: 2026, grossSalary: 12500.00, netSalary: 9875.50,
+    deductions: baseDeductions,
+    benefits: [...baseBenefits, { description: 'PLR Proporcional', amount: 1041.67 }],
+    pdfUrl: 'https://mock.origami.com.br/payslips/202601.pdf',
+  })
+  payslips.push({
+    id: 'pay-202602', month: 2, year: 2026, grossSalary: 12500.00, netSalary: 9875.50,
+    deductions: baseDeductions,
+    benefits: baseBenefits,
+    pdfUrl: 'https://mock.origami.com.br/payslips/202602.pdf',
+  })
+  payslips.push({
+    id: 'pay-202603', month: 3, year: 2026, grossSalary: 12500.00, netSalary: 9875.50,
+    deductions: baseDeductions,
+    benefits: baseBenefits,
+    pdfUrl: 'https://mock.origami.com.br/payslips/202603.pdf',
+  })
+
+  return payslips
 }
 
 // ─── HR Events (5) ──────────────────────────────────────────────────────────
@@ -935,6 +1156,75 @@ export function buildSeedTravelPolicy() {
     requiresPreApproval: true,
     advanceDays: 7,
   }
+}
+
+// ─── Banks (10 major Brazilian banks) ───────────────────────────────────────
+export function buildSeedBanks() {
+  return [
+    { code: '001', name: 'Banco do Brasil', ispb: '00000000' },
+    { code: '033', name: 'Santander', ispb: '90400888' },
+    { code: '104', name: 'Caixa Econômica Federal', ispb: '00360305' },
+    { code: '237', name: 'Bradesco', ispb: '60746948' },
+    { code: '341', name: 'Itaú Unibanco', ispb: '60701190' },
+    { code: '260', name: 'Nu Pagamentos (Nubank)', ispb: '18236120' },
+    { code: '077', name: 'Banco Inter', ispb: '00416968' },
+    { code: '336', name: 'C6 Bank', ispb: '31872495' },
+    { code: '290', name: 'PagSeguro (PagBank)', ispb: '08561701' },
+    { code: '380', name: 'PicPay', ispb: '22896431' },
+    { code: '212', name: 'Banco Original', ispb: '92894922' },
+    { code: '422', name: 'Banco Safra', ispb: '58160789' },
+    { code: '745', name: 'Citibank', ispb: '33479023' },
+    { code: '208', name: 'BTG Pactual', ispb: '30306294' },
+    { code: '070', name: 'BRB - Banco de Brasília', ispb: '00000208' },
+  ]
+}
+
+// ─── Mobile Carriers (4 major Brazilian carriers) ──────────────────────────
+export function buildSeedMobileCarriers() {
+  return [
+    { id: 'vivo', name: 'Vivo', icon: 'phone_android', amounts: [10, 15, 20, 30, 50, 100] },
+    { id: 'claro', name: 'Claro', icon: 'phone_iphone', amounts: [10, 15, 20, 30, 50, 100] },
+    { id: 'tim', name: 'TIM', icon: 'sim_card', amounts: [10, 15, 20, 25, 30, 50] },
+    { id: 'oi', name: 'Oi', icon: 'wifi', amounts: [10, 15, 20, 30, 50] },
+  ]
+}
+
+// ─── Marketplace Offers (10 offers) ────────────────────────────────────────
+export function buildSeedMarketplaceOffers() {
+  return [
+    { id: 'mk-001', merchantName: 'iFood', category: 'alimentacao', discount: '30% OFF', description: 'Primeira compra no iFood Benefícios', couponCode: 'ORIGAMI30', validUntil: dFuture(90).substring(0, 10), imageUrl: null },
+    { id: 'mk-002', merchantName: 'Cinemark', category: 'cultura', discount: '2x1', description: 'Compre 1 ingresso, ganhe outro. Seg a Qui.', couponCode: 'CINE2X1', validUntil: dFuture(60).substring(0, 10), imageUrl: null },
+    { id: 'mk-003', merchantName: 'Drogaria Raia', category: 'saude', discount: '20% OFF', description: 'Desconto em medicamentos genéricos', couponCode: 'RAIA20', validUntil: dFuture(30).substring(0, 10), imageUrl: null },
+    { id: 'mk-004', merchantName: 'Uber', category: 'mobilidade', discount: 'R$10 OFF', description: 'Desconto na próxima corrida', couponCode: 'UBER10ORI', validUntil: dFuture(15).substring(0, 10), imageUrl: null },
+    { id: 'mk-005', merchantName: 'Amazon', category: 'compras', discount: '15% OFF', description: 'Livros e eletrônicos selecionados', couponCode: 'AMZ15ORIG', validUntil: dFuture(45).substring(0, 10), imageUrl: null },
+    { id: 'mk-006', merchantName: 'Smart Fit', category: 'saude', discount: '1 mês grátis', description: 'Primeira mensalidade gratuita para novos', couponCode: 'SMARTFREE', validUntil: dFuture(90).substring(0, 10), imageUrl: null },
+    { id: 'mk-007', merchantName: 'Rappi', category: 'alimentacao', discount: 'Frete Grátis', description: 'Frete grátis em pedidos acima de R$30', couponCode: 'RAPPIFREE', validUntil: dFuture(30).substring(0, 10), imageUrl: null },
+    { id: 'mk-008', merchantName: 'Livraria Cultura', category: 'cultura', discount: '25% OFF', description: 'Livros de tecnologia e negócios', couponCode: 'LIV25TECH', validUntil: dFuture(60).substring(0, 10), imageUrl: null },
+    { id: 'mk-009', merchantName: 'Netflix', category: 'entretenimento', discount: 'R$15 OFF', description: 'Desconto na assinatura mensal', couponCode: 'NFLX15ORI', validUntil: dFuture(120).substring(0, 10), imageUrl: null },
+    { id: 'mk-010', merchantName: 'Gympass', category: 'saude', discount: '50% OFF', description: 'Primeira mensalidade com 50% de desconto', couponCode: 'GYM50ORIG', validUntil: dFuture(90).substring(0, 10), imageUrl: null },
+    { id: 'mk-011', merchantName: 'Alura', category: 'educacao', discount: '30% corporativo', description: 'Plataforma de cursos de tecnologia com 1.000+ cursos', couponCode: 'ALURA30ORI', validUntil: dFuture(60).substring(0, 10), imageUrl: null },
+    { id: 'mk-012', merchantName: 'Shell Box', category: 'mobilidade', discount: 'R$0,15/litro', description: 'Desconto exclusivo em combustível Shell', couponCode: 'SHELLORI', validUntil: dFuture(45).substring(0, 10), imageUrl: null },
+  ]
+}
+
+// ─── Savings Goals (3 per user 1) ──────────────────────────────────────────
+export function buildSeedSavingsGoals() {
+  return [
+    { id: 'sg-001', name: 'Viagem de Férias', targetAmount: 2000, currentAmount: 500, deadline: dFuture(90).substring(0, 10), walletId: 'w1', createdAt: dDays(60) },
+    { id: 'sg-002', name: 'Reserva de Emergência', targetAmount: 5000, currentAmount: 1200, deadline: dFuture(270).substring(0, 10), walletId: 'w2', createdAt: dDays(45) },
+    { id: 'sg-003', name: 'Curso de Inglês', targetAmount: 800, currentAmount: 320, deadline: dFuture(60).substring(0, 10), walletId: 'w7', createdAt: dDays(20) },
+    { id: 'sg-004', name: 'Novo Notebook', targetAmount: 4500, currentAmount: 1800, deadline: dFuture(180).substring(0, 10), walletId: 'w1', createdAt: dDays(90) },
+    { id: 'sg-005', name: 'Presente de Casamento', targetAmount: 1500, currentAmount: 1500, deadline: dDays(5).substring(0, 10), walletId: 'w1', createdAt: dDays(120) },
+  ]
+}
+
+// ─── Transport Cards (Bilhete Único, BOM) ──────────────────────────────────
+export function buildSeedTransportCards() {
+  return [
+    { id: 'tc-001', type: 'bilhete_unico', number: '7891 **** **** 5502', balance: 42.50, lastUsed: dDays(1), status: 'ativo' },
+    { id: 'tc-002', type: 'bom', number: '6012 **** **** 3301', balance: 15.00, lastUsed: dDays(4), status: 'ativo' },
+    { id: 'tc-003', type: 'bilhete_unico', number: '7891 **** **** 8813', balance: 0.00, lastUsed: dDays(30), status: 'bloqueado' },
+  ]
 }
 
 // ─── Static data (banners, FAQs, external benefits, rewards, sessions, security) ─

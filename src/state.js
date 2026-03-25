@@ -37,6 +37,11 @@ import {
   buildSeedLoans,
   buildSeedTravels,
   buildSeedTravelPolicy,
+  buildSeedBanks,
+  buildSeedMobileCarriers,
+  buildSeedMarketplaceOffers,
+  buildSeedSavingsGoals,
+  buildSeedTransportCards,
 } from './seeds.js'
 
 import {
@@ -89,6 +94,13 @@ const state = {
   travels: [],
   travelPolicy: null,
 
+  // New endpoints data
+  banks: [],
+  mobileCarriers: [],
+  marketplaceOffers: [],
+  savingsGoals: [],
+  transportCards: [],
+
   // Per-user ephemeral state
   favorites: {},           // { [userId]: Set<partnerId> }
   notifPrefs: {},          // { [userId]: { pushEnabled, emailEnabled, smsEnabled } }
@@ -96,6 +108,12 @@ const state = {
   sessions: {},            // { [userId]: { active: boolean, loginAt } }
   cardReplacements: [],    // [{ cardId, reason, createdAt }]
   scheduledDeposits: [],   // [{ walletId, amount, scheduledDate, userId }]
+
+  // Transaction PIN per user
+  transactionPins: {},     // { [userId]: string }
+
+  // Travel expenses
+  travelExpenses: [],      // [TravelExpense]
 }
 
 // ─── Failure simulation ─────────────────────────────────────────────────────
@@ -182,12 +200,20 @@ export function reset() {
   state.travels = buildSeedTravels()
   state.travelPolicy = buildSeedTravelPolicy()
 
+  state.banks = buildSeedBanks()
+  state.mobileCarriers = buildSeedMobileCarriers()
+  state.marketplaceOffers = buildSeedMarketplaceOffers()
+  state.savingsGoals = buildSeedSavingsGoals()
+  state.transportCards = buildSeedTransportCards()
+
   state.favorites = {}
   state.notifPrefs = {}
   state.rewardOverrides = {}
   state.sessions = {}
   state.cardReplacements = []
   state.scheduledDeposits = []
+  state.transactionPins = {}
+  state.travelExpenses = []
 
   // Initialize default favorites from seed
   FAVORITE_PARTNER_IDS.forEach(pid => {
@@ -304,12 +330,29 @@ export function getSensitiveData() { return SENSITIVE_DATA }
 export function getScheduledDeposits() { return state.scheduledDeposits }
 export function getNextDeposits(userId) { return state.nextDepositsByUser[String(userId)] ?? [] }
 export function hasNextDepositsEntry(userId) { return String(userId) in state.nextDepositsByUser }
-export function getCardDelivery(cardId) { return state.cardDeliveries[cardId] ?? null }
+export function getCardDelivery(cardId, userId) {
+  // Try compound key first (user-specific), then direct cardId
+  if (userId) {
+    const compound = state.cardDeliveries[`${userId}:${cardId}`]
+    if (compound) return compound
+  }
+  return state.cardDeliveries[cardId] ?? null
+}
 export function getKycResult(userId) { return state.kycResultsByUser[String(userId)] ?? null }
 
 // Static data (never mutated)
 export function getBanners() { return BANNERS }
 export function getFaqs() { return FAQS }
+
+// New endpoint getters (from state — dynamic)
+export function getBanks() { return state.banks }
+export function getMobileCarriers() { return state.mobileCarriers }
+export function getMarketplaceOffers() { return state.marketplaceOffers }
+export function getSavingsGoals() { return state.savingsGoals }
+export function getTransportCards() { return state.transportCards }
+export function getTravelExpenses(travelId) {
+  return travelId ? state.travelExpenses.filter(e => e.travelId === travelId) : state.travelExpenses
+}
 
 // Sessions & security — now dynamic from state
 export function getStaticSessionsList(userId) {
@@ -785,6 +828,18 @@ export function getStateSummary() {
     balanceRequests: state.balanceRequests.length,
     geofenceZones: state.geofenceZones.length,
     digitalWalletCards: state.digitalWalletCards.length,
+    banks: state.banks.length,
+    mobileCarriers: state.mobileCarriers.length,
+    marketplaceOffers: state.marketplaceOffers.length,
+    savingsGoals: state.savingsGoals.length,
+    transportCards: state.transportCards.length,
+    loans: state.loans.length,
+    travels: state.travels.length,
+    travelExpenses: state.travelExpenses.length,
+    clockEntries: state.clockEntries.length,
+    payslips: state.payslips.length,
+    hrEvents: state.hrEvents.length,
+    vacationHistory: state.vacationHistory.length,
   }
 }
 
@@ -799,13 +854,48 @@ export function trackLogout(userId) {
   }
 }
 
+/** Transaction PIN management */
+export function setTransactionPin(userId, pin) {
+  state.transactionPins[String(userId)] = pin
+}
+
+export function getTransactionPin(userId) {
+  return state.transactionPins[String(userId)] ?? null
+}
+
+/** Travel expense storage */
+export function storeTravelExpense(expense) {
+  state.travelExpenses.push(expense)
+  return expense
+}
+
 /** User mutations */
+export function validateUserPassword(cpf, currentPassword) {
+  const user = findUserByCpf(cpf)
+  if (!user) return false
+  // First-access users have null password — skip current password check
+  if (user.senha === null) return true
+  return user.senha === currentPassword
+}
+
 export function updateUserPassword(cpf, newPassword) {
   const user = findUserByCpf(cpf)
   if (!user) return false
   user.senha = newPassword
   if (user.primeiroAcesso) user.primeiroAcesso = false
   return true
+}
+
+/** Update user profile fields */
+export function updateUserProfile(userId, updates) {
+  const user = findUserById(userId)
+  if (!user) return null
+  if (updates.nome) user.nome = updates.nome
+  if (updates.email) user.email = updates.email
+  if (updates.telefone) user.telefone = updates.telefone
+  if (updates.departamento) user.departamento = updates.departamento
+  if (updates.cargo) user.cargo = updates.cargo
+  return user
 }
 
 export function incrementFailedAttempts(userId) {
