@@ -1719,5 +1719,24 @@ export const additionalResolvers = {
     marketplaceOffers: () => getMarketplaceOffers(),
     savingsGoals: () => getSavingsGoals(),
     transportCards: () => getTransportCards(),
+
+    achievements: () => [
+      { id: 'ach-001', name: 'Primeiro PIX', icon: 'pix', description: 'Realizou sua primeira transferencia PIX', unlocked: true, unlockedAt: '2026-03-15T10:00:00Z' },
+      { id: 'ach-002', name: 'Explorador', icon: 'explore', description: 'Visitou 5 telas diferentes do app', unlocked: true, unlockedAt: '2026-03-16T14:00:00Z' },
+      { id: 'ach-003', name: 'Economista', icon: 'savings', description: 'Criou sua primeira meta de economia', unlocked: true, unlockedAt: '2026-03-18T09:00:00Z' },
+      { id: 'ach-004', name: 'Social', icon: 'share', description: 'Indicou um amigo para o Origami', unlocked: true, unlockedAt: '2026-03-20T11:00:00Z' },
+      { id: 'ach-005', name: 'Organizador', icon: 'folder', description: 'Registrou sua primeira despesa', unlocked: false, unlockedAt: null },
+      { id: 'ach-006', name: 'Viajante', icon: 'flight', description: 'Criou seu primeiro pedido de viagem', unlocked: false, unlockedAt: null },
+      { id: 'ach-007', name: 'Leitor', icon: 'book', description: 'Leu 3 artigos na Central de Ajuda', unlocked: false, unlockedAt: null },
+      { id: 'ach-008', name: 'Fiel', icon: 'loyalty', description: 'Usou o app por 7 dias seguidos', unlocked: false, unlockedAt: null },
+    ],
+
+    referrals: () => [
+      { id: 'ref-001', name: 'Maria Santos', date: '2026-03-15', status: 'creditado', reward: 50.00 },
+      { id: 'ref-002', name: 'João Pedro', date: '2026-03-20', status: 'aguardando', reward: 0 },
+      { id: 'ref-003', name: 'Ana Carolina', date: '2026-03-22', status: 'pendente', reward: 0 },
+      { id: 'ref-004', name: 'Carlos Eduardo', date: '2026-03-23', status: 'creditado', reward: 50.00 },
+      { id: 'ref-005', name: 'Fernanda Rocha', date: '2026-03-24', status: 'pendente', reward: 0 },
+    ],
   },
 }

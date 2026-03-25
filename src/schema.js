@@ -273,6 +273,10 @@ export const typeDefs = /* GraphQL */ `
     # Transport Cards
     transportCards: [TransportCard!]!
 
+    # Achievements & Referrals
+    achievements: [Achievement!]!
+    referrals: [Referral!]!
+
     # Credit
     requiredCreditFiles(type: String!): [RequiredFile!]!
     loans: [Loan!]!
@@ -1041,5 +1045,24 @@ export const typeDefs = /* GraphQL */ `
     balance: Float!
     lastUsed: String
     status: String!
+  }
+
+  # ─── Achievements ───────────────────────────────────────────────────
+  type Achievement {
+    id: ID!
+    name: String!
+    icon: String!
+    description: String
+    unlocked: Boolean!
+    unlockedAt: String
+  }
+
+  # ─── Referrals ─────────────────────────────────────────────────────
+  type Referral {
+    id: ID!
+    name: String!
+    date: String!
+    status: String!
+    reward: Float
   }
 `
