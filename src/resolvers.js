@@ -648,6 +648,17 @@ export const resolvers = {
       return ok()
     },
 
+    updateProfile: (_, { nome, email, telefone }, context) => {
+      const userId = requireAuth(context)
+      const updates = {}
+      if (nome) updates.nome = nome
+      if (email) updates.email = email
+      if (telefone) updates.telefone = telefone
+      updateUserProfile(userId, updates)
+      logMutation('updateProfile', `user:${userId} | updates: ${JSON.stringify(updates)}`)
+      return ok()
+    },
+
     setTransactionPin: (_, { pin }, context) => {
       const userId = requireAuth(context)
       if (!pin || pin.length < 4) {

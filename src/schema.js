@@ -297,6 +297,7 @@ export const typeDefs = /* GraphQL */ `
     validateCode(code: String!): MutationResult!
     validateDeviceToken(token: String!): DeviceValidationResult!
     terminateSession(sessionId: ID!): MutationResult!
+    updateProfile(nome: String, email: String, telefone: String): MutationResult!
     setTransactionPin(pin: String!): MutationResult!
     validateTransactionPin(pin: String!): MutationResult!
     toggle2FA(enabled: Boolean!): MutationResult!
