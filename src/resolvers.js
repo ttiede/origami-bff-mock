@@ -498,6 +498,15 @@ export const resolvers = {
     },
 
     getEvents: (_, args) => resolvers.Query.hrEvents(_, args),
+
+    // ── Spending Challenge ──────────────────────────────────────────
+    spendingChallenge: () => ({
+      id: 'challenge-1',
+      title: 'Gaste menos de R$500 em alimentação',
+      target: 500.0,
+      current: 320.0,
+      category: 'alimentacao',
+    }),
   },
 
   // ══════════════════════════════════════════════════════════════════

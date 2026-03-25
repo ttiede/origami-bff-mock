@@ -273,6 +273,9 @@ export const typeDefs = /* GraphQL */ `
     # Transport Cards
     transportCards: [TransportCard!]!
 
+    # Spending Challenge
+    spendingChallenge: SpendingChallenge
+
     # Achievements & Referrals
     achievements: [Achievement!]!
     referrals: [Referral!]!
@@ -1055,6 +1058,15 @@ export const typeDefs = /* GraphQL */ `
     description: String
     unlocked: Boolean!
     unlockedAt: String
+  }
+
+  # ─── Spending Challenge ────────────────────────────────────────────
+  type SpendingChallenge {
+    id: ID!
+    title: String!
+    target: Float!
+    current: Float!
+    category: String!
   }
 
   # ─── Referrals ─────────────────────────────────────────────────────
