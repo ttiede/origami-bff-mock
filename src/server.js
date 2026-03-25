@@ -16,6 +16,23 @@ const startedAt = Date.now()
 const RESET_INTERVAL_MS = 60 * 60 * 1000 // 1 hour
 let lastResetAt = Date.now()
 
+// ─── Error simulation flags (one-shot) ─────────────────────────────────────
+const _simulationFlags = {
+  timeout: false,
+  error500: false,
+  invalidJson: false,
+  emptyResponse: false,
+  slowMs: 0,
+}
+
+function clearSimulationFlags() {
+  _simulationFlags.timeout = false
+  _simulationFlags.error500 = false
+  _simulationFlags.invalidJson = false
+  _simulationFlags.emptyResponse = false
+  _simulationFlags.slowMs = 0
+}
+
 setInterval(() => {
   reset()
   lastResetAt = Date.now()
@@ -579,9 +596,10 @@ const server = createServer((req, res) => {
     reset()
     clearLogs()
     clearScenarios()
+    clearSimulationFlags()
     lastResetAt = Date.now()
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' })
-    res.end(JSON.stringify({ success: true, message: 'State + logs + scenarios reset to seed data' }))
+    res.end(JSON.stringify({ success: true, message: 'State + logs + scenarios + simulations reset to seed data' }))
     return
   }
 
@@ -753,6 +771,123 @@ const server = createServer((req, res) => {
     return
   }
 
+  // ─── Simulate error endpoints (POST /simulate/*) ──────────────
+  if (req.method === 'POST' && req.url?.startsWith('/simulate/')) {
+    const route = req.url.replace('/simulate/', '')
+    const jsonHeaders = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+
+    if (route === 'timeout') {
+      _simulationFlags.timeout = true
+      console.log('[SIMULATE] Armed: next GraphQL request will timeout (35s)')
+      res.writeHead(200, jsonHeaders)
+      res.end(JSON.stringify({ success: true, message: 'Next request will timeout' }))
+      return
+    }
+
+    if (route === 'error500') {
+      _simulationFlags.error500 = true
+      console.log('[SIMULATE] Armed: next GraphQL request will return 500')
+      res.writeHead(200, jsonHeaders)
+      res.end(JSON.stringify({ success: true, message: 'Next request will return 500' }))
+      return
+    }
+
+    if (route === 'invalid-json') {
+      _simulationFlags.invalidJson = true
+      console.log('[SIMULATE] Armed: next GraphQL request will return invalid JSON')
+      res.writeHead(200, jsonHeaders)
+      res.end(JSON.stringify({ success: true, message: 'Next request will return invalid JSON' }))
+      return
+    }
+
+    if (route === 'empty-response') {
+      _simulationFlags.emptyResponse = true
+      console.log('[SIMULATE] Armed: next GraphQL request will return empty data')
+      res.writeHead(200, jsonHeaders)
+      res.end(JSON.stringify({ success: true, message: 'Next request will return empty data' }))
+      return
+    }
+
+    if (route.startsWith('slow/')) {
+      const ms = parseInt(route.replace('slow/', ''), 10)
+      if (isNaN(ms) || ms < 0) {
+        res.writeHead(400, jsonHeaders)
+        res.end(JSON.stringify({ success: false, message: 'Invalid delay value. Use /simulate/slow/:ms with a positive integer.' }))
+        return
+      }
+      _simulationFlags.slowMs = ms
+      console.log(`[SIMULATE] Armed: next GraphQL request delayed by ${ms}ms`)
+      res.writeHead(200, jsonHeaders)
+      res.end(JSON.stringify({ success: true, message: `Next request delayed by ${ms}ms` }))
+      return
+    }
+
+    if (route === 'clear') {
+      clearSimulationFlags()
+      console.log('[SIMULATE] All simulation flags cleared')
+      res.writeHead(200, jsonHeaders)
+      res.end(JSON.stringify({ success: true, message: 'All simulations cleared' }))
+      return
+    }
+
+    // Unknown simulate route
+    res.writeHead(404, jsonHeaders)
+    res.end(JSON.stringify({ success: false, message: `Unknown simulation: ${route}. Available: timeout, error500, invalid-json, empty-response, slow/:ms, clear` }))
+    return
+  }
+
+  // ─── Simulation flag interception (before GraphQL) ────────────
+  if (req.url?.startsWith('/graphql') && req.method === 'POST') {
+    const corsHeaders = { 'Access-Control-Allow-Origin': '*' }
+
+    // timeout: wait 35s then respond with 504
+    if (_simulationFlags.timeout) {
+      _simulationFlags.timeout = false
+      console.log('[SIMULATE] Triggering timeout (35s delay)')
+      setTimeout(() => {
+        res.writeHead(504, { 'Content-Type': 'application/json', ...corsHeaders })
+        res.end(JSON.stringify({ errors: [{ message: 'Gateway Timeout (simulated)' }] }))
+      }, 35000)
+      return
+    }
+
+    // error500: immediate 500 response
+    if (_simulationFlags.error500) {
+      _simulationFlags.error500 = false
+      console.log('[SIMULATE] Triggering error 500')
+      res.writeHead(500, { 'Content-Type': 'application/json', ...corsHeaders })
+      res.end(JSON.stringify({ errors: [{ message: 'Internal Server Error (simulated)' }] }))
+      return
+    }
+
+    // invalidJson: return malformed JSON
+    if (_simulationFlags.invalidJson) {
+      _simulationFlags.invalidJson = false
+      console.log('[SIMULATE] Triggering invalid JSON response')
+      res.writeHead(200, { 'Content-Type': 'application/json', ...corsHeaders })
+      res.end('{"data": null, "errors": [{MALFORMED_JSON_HERE')
+      return
+    }
+
+    // emptyResponse: return { data: null }
+    if (_simulationFlags.emptyResponse) {
+      _simulationFlags.emptyResponse = false
+      console.log('[SIMULATE] Triggering empty response (data: null)')
+      res.writeHead(200, { 'Content-Type': 'application/json', ...corsHeaders })
+      res.end(JSON.stringify({ data: null }))
+      return
+    }
+
+    // slow: add delay then forward to yoga
+    if (_simulationFlags.slowMs > 0) {
+      const delay = _simulationFlags.slowMs
+      _simulationFlags.slowMs = 0
+      console.log(`[SIMULATE] Triggering slow response (${delay}ms delay)`)
+      setTimeout(() => yoga(req, res), delay)
+      return
+    }
+  }
+
   // ─── GraphQL ────────────────────────────────────────────────────
   yoga(req, res)
 })
@@ -768,6 +903,7 @@ server.listen(PORT, '0.0.0.0', () => {
 |  GET /health  -> server health check                 |
 |  GET /status  -> state summary                       |
 |  GET /simulate-failures -> toggle failure sim        |
+|  POST /simulate/*      -> one-shot error simulation |
 |  Auto-reset every 60 minutes                         |
 +======================================================+
 Format: [HH:MM:SS.mmm] TYPE     OperationName                     | user:N
