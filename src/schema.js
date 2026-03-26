@@ -201,6 +201,36 @@ export const typeDefs = /* GraphQL */ `
     singleTransactionLimit: Float
   }
 
+  # #165: Email update verification
+  input SendEmailVerificationInput {
+    newEmail: String!
+  }
+  input ConfirmEmailChangeInput {
+    code: String!
+  }
+
+  # #166: Phone update verification
+  input SendPhoneVerificationInput {
+    newPhone: String!
+  }
+  input ConfirmPhoneChangeInput {
+    code: String!
+  }
+
+  # #174: Document signature
+  input SignDocumentInput {
+    documentId: ID!
+    signatureBase64: String
+  }
+
+  # #175: Per-query error simulation
+  input ErrorSimulationInput {
+    queryName: String!
+    errorCode: String!
+    errorMessage: String
+    rate: Float
+  }
+
   # #064: Card order input
   input CardOrderInput {
     tipo: String!
@@ -381,6 +411,18 @@ export const typeDefs = /* GraphQL */ `
     travelDetail(id: ID!): TravelRequest
     travelPolicy: TravelPolicy
     perDiem(destination: String!): PerDiem
+
+    # #164: CEP lookup
+    queryCep(cep: String!): CepResult
+
+    # #168: App version check
+    appVersion: AppVersionInfo
+
+    # #169: Feature flags
+    featureFlags: [FeatureFlag!]!
+
+    # #170: Changelog / whats-new
+    changelog: [ChangelogEntry!]!
   }
 
   # ─── Mutations ──────────────────────────────────────────────────────
@@ -539,6 +581,27 @@ export const typeDefs = /* GraphQL */ `
     cancelTravel(id: ID!): Boolean
     approveTravel(id: ID!): TravelRequest
     rejectTravel(id: ID!, reason: String!): TravelRequest
+
+    # #165: Email update with verification
+    sendEmailVerification(input: SendEmailVerificationInput!): MutationResult!
+    confirmEmailChange(input: ConfirmEmailChangeInput!): MutationResult!
+
+    # #166: Phone update with SMS verification
+    sendPhoneVerification(input: SendPhoneVerificationInput!): MutationResult!
+    confirmPhoneChange(input: ConfirmPhoneChangeInput!): MutationResult!
+
+    # #172: Feedback with NPS dedup
+    submitNpsFeedback(score: Int!, comment: String): MutationResult!
+
+    # #174: Document signature
+    signDocument(input: SignDocumentInput!): DocumentSignature
+
+    # #175: Per-query error simulation
+    setErrorSimulation(input: ErrorSimulationInput!): MutationResult!
+    clearErrorSimulation(queryName: String!): MutationResult!
+
+    # #186: Random null fields stress test
+    toggleNullableStress(enabled: Boolean!): MutationResult!
   }
 
   # ─── Flow Token types ──────────────────────────────────────────────
@@ -1390,5 +1453,42 @@ export const typeDefs = /* GraphQL */ `
     date: String!
     status: String!
     reward: Float
+  }
+
+  # #164: CEP lookup result
+  type CepResult {
+    cep: String!
+    rua: String!
+    bairro: String!
+    cidade: String!
+    uf: String!
+  }
+
+  # #168: App version info
+  type AppVersionInfo {
+    minVersion: String!
+    currentVersion: String!
+    updateUrl: String!
+    forceUpdate: Boolean!
+  }
+
+  # #169: Feature flag
+  type FeatureFlag {
+    feature: String!
+    enabled: Boolean!
+  }
+
+  # #170: Changelog entry
+  type ChangelogEntry {
+    version: String!
+    date: String!
+    changes: [String!]!
+  }
+
+  # #174: Document signature result
+  type DocumentSignature {
+    documentId: ID!
+    signedAt: String!
+    signatureHash: String!
   }
 `

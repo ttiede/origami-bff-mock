@@ -90,6 +90,19 @@ import {
   updatePartnerBenefits,
   // #163: Notification delete
   deleteNotification,
+  // #165-166: Email/Phone verification
+  setPendingEmailChange, getPendingEmailChange, clearPendingEmailChange,
+  setPendingPhoneChange, getPendingPhoneChange, clearPendingPhoneChange,
+  // #172: NPS feedback dedup
+  getNpsFeedback, setNpsFeedback,
+  // #174: Document signatures
+  signDocumentState, getDocumentSignature,
+  // #175: Per-query error simulation
+  setErrorSimulation as storeErrorSimulation, getErrorSimulation, clearErrorSimulation as stateClearErrorSimulation,
+  // #186: Nullable stress test
+  isNullableStressEnabled, setNullableStress,
+  // #194: Atomic wallet deduction
+  atomicDeductWallet,
 } from './state.js'
 
 // ── GraphQL Error helper ─────────────────────────────────────────────────────
@@ -295,6 +308,72 @@ const PIX_RECIPIENTS = {
   '45678901234567': { nomeTitular: 'Empresa ABC Ltda', banco: 'Caixa Econômica', tipoConta: 'corrente' },
 }
 
+// ── #175: Per-query error simulation check ──────────────────────────────────
+function checkQueryErrorSimulation(queryName) {
+  const sim = getErrorSimulation(queryName)
+  if (!sim) return
+  if (sim.rate < 1.0 && Math.random() > sim.rate) return
+  // #180: Rate limit with Retry-After header
+  if (sim.errorCode === 'RATE_LIMITED') {
+    throw new GraphQLError(sim.errorMessage, {
+      extensions: {
+        code: 'RATE_LIMITED',
+        http: { status: 429, headers: new Map([['Retry-After', '30']]) },
+      },
+    })
+  }
+  // #181: Multiple errors array — include secondary error info in extensions
+  throw new GraphQLError(sim.errorMessage, {
+    extensions: {
+      code: sim.errorCode,
+      http: { status: 500 },
+      additionalErrors: [
+        { message: `Secondary: ${sim.errorMessage}`, code: sim.errorCode },
+      ],
+    },
+  })
+}
+
+// ── #176: Partial response helper — returns data with some fields errored ───
+function partialResponse(data, errorFields = []) {
+  const errors = errorFields.map(field => ({
+    message: `Campo '${field}' temporariamente indisponível.`,
+    path: [field],
+    extensions: { code: 'PARTIAL_ERROR' },
+  }))
+  return { data, errors }
+}
+
+// ── #186: Nullable stress — randomly null-ify optional fields ───────────────
+function applyNullableStress(obj) {
+  if (!isNullableStressEnabled() || !obj || typeof obj !== 'object') return obj
+  const result = Array.isArray(obj) ? [...obj] : { ...obj }
+  for (const key of Object.keys(result)) {
+    if (key === 'id' || key === '__typename') continue
+    if (result[key] != null && typeof result[key] !== 'boolean' && Math.random() < 0.15) {
+      result[key] = null
+    }
+  }
+  return result
+}
+
+// ── #196: CPF format handling — accept both with and without dots/dashes ────
+function cleanCpfInput(cpf) {
+  return cpf ? cpf.replace(/\D/g, '') : cpf
+}
+
+// ── #164: CEP lookup mock data ──────────────────────────────────────────────
+const CEP_DB = {
+  '01310100': { rua: 'Avenida Paulista', bairro: 'Bela Vista', cidade: 'São Paulo', uf: 'SP' },
+  '01001000': { rua: 'Praça da Sé', bairro: 'Sé', cidade: 'São Paulo', uf: 'SP' },
+  '20040020': { rua: 'Avenida Rio Branco', bairro: 'Centro', cidade: 'Rio de Janeiro', uf: 'RJ' },
+  '30130000': { rua: 'Avenida Afonso Pena', bairro: 'Centro', cidade: 'Belo Horizonte', uf: 'MG' },
+  '80010000': { rua: 'Rua XV de Novembro', bairro: 'Centro', cidade: 'Curitiba', uf: 'PR' },
+  '70040010': { rua: 'Esplanada dos Ministérios', bairro: 'Zona Cívico-Administrativa', cidade: 'Brasília', uf: 'DF' },
+  '40010000': { rua: 'Praça Municipal', bairro: 'Centro', cidade: 'Salvador', uf: 'BA' },
+  '50010000': { rua: 'Avenida Guararapes', bairro: 'Santo Antônio', cidade: 'Recife', uf: 'PE' },
+}
+
 // ── Generate e2eid for PIX transactions (#080) ──────────────────────────────
 function generateE2eid() {
   const ispb = '12345678'
@@ -321,8 +400,9 @@ export const resolvers = {
   Query: {
 
     // ── Auth ──────────────────────────────────────────────────────
+    // #196: Accept both formatted and unformatted CPF
     findByCpf: (_, { cpf }) => {
-      const user = findUserByCpf(cpf)
+      const user = findUserByCpf(cleanCpfInput(cpf))
       if (!user) return null
       return {
         id: user.id, nome: user.nome, cpf: user.cpf,
@@ -339,9 +419,15 @@ export const resolvers = {
     securityActivity: (_, __, context) => getSecurityActivityList(uid(context)),
 
     // ── Wallet ────────────────────────────────────────────────────
-    wallets: (_, __, context) => getWallets(uid(context)),
+    wallets: (_, __, context) => {
+      checkQueryErrorSimulation('wallets')
+      const wallets = getWallets(uid(context))
+      if (isNullableStressEnabled()) return wallets.map(w => applyNullableStress(w))
+      return wallets
+    },
 
     transactions: (_, { walletId, dateFrom, dateTo, categoria, direcao, search, limit, offset } = {}, context) => {
+      checkQueryErrorSimulation('transactions')
       let txs = getTransactions(uid(context))
       if (walletId)   txs = txs.filter(t => t.walletId === walletId)
       if (dateFrom)   txs = txs.filter(t => t.data >= dateFrom)
@@ -965,8 +1051,9 @@ export const resolvers = {
     login: (_, { input }) => {
       const { cpf, password } = input
 
+      // #196: Accept both formatted (123.456.789-01) and unformatted CPF
       // #025: CPF check digit validation
-      const cleanCpf = cpf.replace(/\D/g, '')
+      const cleanCpf = cleanCpfInput(cpf)
       if (!isValidCpf(cleanCpf)) {
         logMutation('login', `FAILED: invalid CPF format ${cpf}`)
         throw gqlError('CPF inválido. Verifique os dígitos informados.', 'BAD_REQUEST', 400)
@@ -1095,7 +1182,7 @@ export const resolvers = {
     },
 
     forgotPassword: (_, { cpf }) => {
-      const user = findUserByCpf(cpf)
+      const user = findUserByCpf(cleanCpfInput(cpf))
       if (!user) {
         throw gqlError('CPF não encontrado.', 'NOT_FOUND', 404)
       }
@@ -1378,7 +1465,11 @@ export const resolvers = {
         return fullTx(tx)
       }
       validateWalletTransaction(userId, input.walletId, input.amount, 'PIX')
-      const wallet = deductWallet(userId, input.walletId, input.amount)
+      // #194: Atomic wallet deduction (concurrent protection)
+      const wallet = atomicDeductWallet(userId, input.walletId, input.amount)
+      if (!wallet) {
+        throw gqlError('Operação concorrente detectada. Tente novamente.', 'CONCURRENT_OPERATION', 409)
+      }
       addToDailyTotal(userId, input.amount)
       const tx = makeTx('pix', `PIX para ${input.chavePix}`, input.amount, input.walletId, 'PIX')
       // #080: Add e2eid to PIX transactions
@@ -2916,6 +3007,171 @@ export const additionalResolvers = {
         ...partner,
         landingPageUrl: `https://parceiros.origami.com.br/${partnerId}`,
       }
+    },
+
+    // #164: CEP lookup query
+    queryCep: (_, { cep }) => {
+      checkQueryErrorSimulation('queryCep')
+      const clean = cep.replace(/\D/g, '')
+      if (clean.length !== 8) throw gqlError('CEP deve ter 8 dígitos.', 'BAD_REQUEST', 400)
+      const data = CEP_DB[clean]
+      if (!data) {
+        // Generate mock data for unknown CEPs
+        return { cep: clean, rua: `Rua Mock ${clean.slice(0, 4)}`, bairro: 'Centro', cidade: 'Cidade Mock', uf: 'SP' }
+      }
+      return { cep: clean, ...data }
+    },
+
+    // #168: App version check
+    appVersion: () => {
+      checkQueryErrorSimulation('appVersion')
+      return {
+        minVersion: '2.0.0',
+        currentVersion: '3.1.2',
+        updateUrl: 'https://play.google.com/store/apps/details?id=com.origami.app',
+        forceUpdate: false,
+      }
+    },
+
+    // #169: Feature flags
+    featureFlags: () => {
+      checkQueryErrorSimulation('featureFlags')
+      return [
+        { feature: 'pix_cashout', enabled: true },
+        { feature: 'virtual_card', enabled: true },
+        { feature: 'biometric_login', enabled: true },
+        { feature: 'dark_mode', enabled: true },
+        { feature: 'savings_goals', enabled: true },
+        { feature: 'marketplace', enabled: true },
+        { feature: 'travel_management', enabled: true },
+        { feature: 'credit_consignado', enabled: true },
+        { feature: 'nps_survey', enabled: true },
+        { feature: 'document_signature', enabled: false },
+        { feature: 'international_card', enabled: true },
+        { feature: 'copilot_ai', enabled: false },
+      ]
+    },
+
+    // #170: Changelog / whats-new
+    changelog: () => {
+      checkQueryErrorSimulation('changelog')
+      return [
+        { version: '3.1.2', date: '2026-03-25', changes: ['Correção de crash ao abrir extrato com muitas transações', 'Melhoria de performance no carregamento de carteiras'] },
+        { version: '3.1.0', date: '2026-03-15', changes: ['Novo: PIX Cash Out disponível para carteiras flexível e alimentação', 'Novo: Assinatura digital de documentos', 'Melhoria no fluxo de recarga de celular'] },
+        { version: '3.0.0', date: '2026-03-01', changes: ['Redesign completo da interface (dark navy)', 'Novo sistema de notificações em tempo real', 'Suporte a múltiplas chaves PIX', 'Metas de economia com acompanhamento visual'] },
+        { version: '2.5.0', date: '2026-02-15', changes: ['Novo: Clube de Vantagens com cupons exclusivos', 'Consulta de saldo do Bilhete Único integrada', 'Melhorias de acessibilidade'] },
+        { version: '2.4.0', date: '2026-02-01', changes: ['Novo: Gestão de viagens corporativas', 'Simulação de crédito consignado', 'Exportação de extrato em PDF e CSV'] },
+      ]
+    },
+  },
+
+  Mutation: {
+    // #165: Email update with verification
+    sendEmailVerification: (_, { input }, context) => {
+      const userId = requireAuth(context)
+      if (!input.newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.newEmail)) {
+        throw gqlError('E-mail inválido.', 'BAD_REQUEST', 400)
+      }
+      const code = '123456' // Mock verification code
+      setPendingEmailChange(userId, input.newEmail, code)
+      logMutation('sendEmailVerification', `user:${userId} | newEmail:${input.newEmail}`)
+      return { success: true, message: 'Código de verificação enviado para o novo e-mail.' }
+    },
+
+    confirmEmailChange: (_, { input }, context) => {
+      const userId = requireAuth(context)
+      const pending = getPendingEmailChange(userId)
+      if (!pending) throw gqlError('Nenhuma alteração de e-mail pendente.', 'BAD_REQUEST', 400)
+      if (Date.now() > pending.expiresAt) {
+        clearPendingEmailChange(userId)
+        throw gqlError('Código expirado. Solicite um novo código.', 'EXPIRED', 422)
+      }
+      if (input.code !== pending.code) throw gqlError('Código de verificação incorreto.', 'UNAUTHORIZED', 401)
+      updateUserProfile(userId, { email: pending.newEmail })
+      clearPendingEmailChange(userId)
+      logMutation('confirmEmailChange', `user:${userId} | email updated to ${pending.newEmail}`)
+      return { success: true, message: 'E-mail atualizado com sucesso.' }
+    },
+
+    // #166: Phone update with SMS verification
+    sendPhoneVerification: (_, { input }, context) => {
+      const userId = requireAuth(context)
+      const cleanPhone = input.newPhone.replace(/\D/g, '')
+      if (cleanPhone.length < 10 || cleanPhone.length > 13) {
+        throw gqlError('Telefone inválido. Deve ter entre 10 e 13 dígitos.', 'BAD_REQUEST', 400)
+      }
+      const code = '654321' // Mock SMS code
+      setPendingPhoneChange(userId, input.newPhone, code)
+      logMutation('sendPhoneVerification', `user:${userId} | newPhone:${input.newPhone}`)
+      return { success: true, message: 'Código de verificação enviado via SMS.' }
+    },
+
+    confirmPhoneChange: (_, { input }, context) => {
+      const userId = requireAuth(context)
+      const pending = getPendingPhoneChange(userId)
+      if (!pending) throw gqlError('Nenhuma alteração de telefone pendente.', 'BAD_REQUEST', 400)
+      if (Date.now() > pending.expiresAt) {
+        clearPendingPhoneChange(userId)
+        throw gqlError('Código expirado. Solicite um novo código.', 'EXPIRED', 422)
+      }
+      if (input.code !== pending.code) throw gqlError('Código de verificação incorreto.', 'UNAUTHORIZED', 401)
+      updateUserProfile(userId, { telefone: pending.newPhone })
+      clearPendingPhoneChange(userId)
+      logMutation('confirmPhoneChange', `user:${userId} | phone updated to ${pending.newPhone}`)
+      return { success: true, message: 'Telefone atualizado com sucesso.' }
+    },
+
+    // #172: NPS Feedback with dedup (prevent within 30 days)
+    submitNpsFeedback: (_, { score, comment }, context) => {
+      const userId = requireAuth(context)
+      if (score < 0 || score > 10) throw gqlError('Score deve ser entre 0 e 10.', 'BAD_REQUEST', 400)
+      const existing = getNpsFeedback(userId)
+      if (existing) {
+        const daysSince = (Date.now() - new Date(existing.submittedAt).getTime()) / 86400000
+        if (daysSince < 30) {
+          throw gqlError(
+            `Você já enviou feedback NPS há ${Math.floor(daysSince)} dias. Aguarde 30 dias para enviar novamente.`,
+            'DUPLICATE_NPS', 429
+          )
+        }
+      }
+      setNpsFeedback(userId, score, comment)
+      logMutation('submitNpsFeedback', `user:${userId} | score:${score}`)
+      return { success: true, message: 'Feedback NPS registrado com sucesso.' }
+    },
+
+    // #174: Document signature
+    signDocument: (_, { input }, context) => {
+      const userId = requireAuth(context)
+      if (!input.documentId) throw gqlError('documentId é obrigatório.', 'BAD_REQUEST', 400)
+      const existing = getDocumentSignature(input.documentId)
+      if (existing) throw gqlError('Documento já foi assinado.', 'CONFLICT', 409)
+      const sig = signDocumentState(input.documentId)
+      logMutation('signDocument', `user:${userId} | doc:${input.documentId} | hash:${sig.signatureHash}`)
+      return { documentId: input.documentId, signedAt: sig.signedAt, signatureHash: sig.signatureHash }
+    },
+
+    // #175: Per-query configurable error simulation
+    setErrorSimulation: (_, { input }, context) => {
+      requireAuth(context)
+      storeErrorSimulation(input.queryName, input.errorCode, input.errorMessage, input.rate)
+      logMutation('setErrorSimulation', `query:${input.queryName} → ${input.errorCode} rate:${input.rate ?? 1.0}`)
+      return { success: true, message: `Error simulation set for ${input.queryName}.` }
+    },
+
+    clearErrorSimulation: (_, { queryName }, context) => {
+      requireAuth(context)
+      stateClearErrorSimulation(queryName)
+      logMutation('clearErrorSimulation', `query:${queryName} → cleared`)
+      return { success: true, message: `Error simulation cleared for ${queryName}.` }
+    },
+
+    // #186: Nullable stress test toggle
+    toggleNullableStress: (_, { enabled }, context) => {
+      requireAuth(context)
+      setNullableStress(enabled)
+      logMutation('toggleNullableStress', `enabled:${enabled}`)
+      return { success: true, message: `Nullable stress test ${enabled ? 'enabled' : 'disabled'}.` }
     },
   },
 }

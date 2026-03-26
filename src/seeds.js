@@ -16,7 +16,8 @@ export const SEED_USERS = [
   { id: '5', nome: 'Ana Carolina Lima', cpf: '80587310057', email: 'ana.lima@industriaabc.com.br', telefone: '(21) 95432-1098', empresa: 'Indústria ABC S.A.', departamento: 'Marketing', cargo: 'Coordenadora de Marketing', senha: 'Origami5!', primeiroAcesso: false, bloqueioDefinitivo: false, tentativasFalhas: 2 },
   { id: '6', nome: 'Roberto Almeida', cpf: '76127261066', email: 'roberto.almeida@comercioxyz.com.br', telefone: '(31) 94321-0987', empresa: 'Comércio XYZ Ltda', departamento: 'Logística', cargo: 'Gerente de Logística', senha: 'Origami6!', primeiroAcesso: false, bloqueioDefinitivo: true, tentativasFalhas: 0 },
   { id: '7', nome: 'Fernanda Rocha Barbosa', cpf: '66392332154', email: 'fernanda.barbosa@startupnovaera.com.br', telefone: '(11) 93210-9876', empresa: 'Startup Nova Era', departamento: 'Desenvolvimento', cargo: 'Estagiária de Desenvolvimento', senha: 'Origami7!', primeiroAcesso: false, bloqueioDefinitivo: false, tentativasFalhas: 0 },
-  { id: '8', nome: 'Diego Nascimento Santos', cpf: '46881973659', email: 'diego.santos@megacorp.com.br', telefone: '(11) 92109-8765', empresa: 'MegaCorp International', departamento: 'Diretoria Executiva', cargo: 'Diretor de Operações', senha: 'Origami8!', primeiroAcesso: false, bloqueioDefinitivo: false, tentativasFalhas: 0 },
+  // #191: User with extremely long name (60+ chars)
+  { id: '8', nome: 'Diego Nascimento Albuquerque dos Santos Magalhães de Oliveira Junior', cpf: '46881973659', email: 'diego.santos@megacorp.com.br', telefone: '(11) 92109-8765', empresa: 'MegaCorp International', departamento: 'Diretoria Executiva', cargo: 'Diretor de Operações', senha: 'Origami8!', primeiroAcesso: false, bloqueioDefinitivo: false, tentativasFalhas: 0 },
   { id: '9', nome: 'Patrícia Vieira Duarte', cpf: '99356327254', email: 'patricia.duarte@consultoriadelta.com.br', telefone: '(21) 91098-7654', empresa: 'Consultoria Delta', departamento: 'Jurídico', cargo: 'Advogada Sênior', senha: 'Origami9!', primeiroAcesso: false, bloqueioDefinitivo: false, tentativasFalhas: 4, bloqueioAte: new Date(Date.now() + 2 * 3600000).toISOString() },
   { id: '10', nome: 'Thiago Martins Ribeiro', cpf: '95181756085', email: 'thiago.ribeiro@remotetech.com.br', telefone: '(48) 90987-6543', empresa: 'RemoteTech LTDA', departamento: 'Infraestrutura', cargo: 'Engenheiro DevOps', senha: null, primeiroAcesso: true, bloqueioDefinitivo: false, tentativasFalhas: 0 },
   { id: '11', nome: 'Juliana Campos Neto', cpf: '48063581776', email: 'juliana.neto@varejoexpress.com.br', telefone: '(19) 98765-1234', empresa: 'Varejo Express', departamento: 'Vendas', cargo: 'Supervisora de Vendas', senha: 'Origami11!', primeiroAcesso: false, bloqueioDefinitivo: false, tentativasFalhas: 1 },
@@ -26,7 +27,7 @@ export const SEED_USERS = [
 // ─── Wallets by User (30 total) ─────────────────────────────────────────────
 export function buildSeedWallets() {
   const NOW_ISO = NOW()
-  return {
+  const result = {
     '1': [
       { id: 'w1', nome: 'Flexível ACT 2026', tipo: 'flexivel', saldo: 111.85, limiteDisponivel: 500.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Pode ser usado de acordo com as regras de uso da sua empresa em lojas físicas e virtuais e para compra em parceiros.', gastoSugeridoPorDia: 7.00, regrasDeUso: ['Alimentação','Conveniência','Farmácia','Livraria','Combustível'] },
       { id: 'w2', nome: 'Benefício Flexível', tipo: 'flexivel', saldo: 320.00, limiteDisponivel: 800.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Benefício flexível para uso em diversos estabelecimentos conforme regras da empresa.', gastoSugeridoPorDia: 10.00, regrasDeUso: ['Alimentação','Refeição','Transporte','Cultura'] },
@@ -63,7 +64,8 @@ export function buildSeedWallets() {
       { id: 'w4', nome: 'Home Office', tipo: 'homeoffice', saldo: 200.00, limiteDisponivel: 300.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Benefício home office para equipamentos e mobiliário.', gastoSugeridoPorDia: 0.00, regrasDeUso: ['Papelaria','Informática','Mobiliário','Ergonomia'] },
     ],
     '7': [
-      { id: 'w1', nome: 'Alimentação Estágio', tipo: 'alimentacao', saldo: 23.50, limiteDisponivel: 400.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Vale-alimentação de estágio.', gastoSugeridoPorDia: 12.00, regrasDeUso: ['Lanchonetes','Supermercados','Padarias'] },
+      // #190: Wallet with many decimal places (R$123.456789 edge case)
+      { id: 'w1', nome: 'Alimentação Estágio', tipo: 'alimentacao', saldo: 123.456789, limiteDisponivel: 400.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Vale-alimentação de estágio com saldo de muitas casas decimais.', gastoSugeridoPorDia: 12.00, regrasDeUso: ['Lanchonetes','Supermercados','Padarias'] },
       { id: 'w2', nome: 'Transporte Estágio', tipo: 'transporte', saldo: 8.20, limiteDisponivel: 200.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Vale-transporte de estágio.', gastoSugeridoPorDia: 8.00, regrasDeUso: ['Ônibus','Metrô','Bilhete Único'] },
     ],
     '8': [
@@ -95,7 +97,22 @@ export function buildSeedWallets() {
     ],
     // #185: User 12 (Rafael desligado) with truly empty state — zero wallets
     '12': [],
+    // #197: User 8 with 12+ wallets (already has 7, add more for edge case)
+    // (extra wallets appended to user 8 existing array above)
   }
+
+  // #197: Append extra wallets to user 8 so total >= 12
+  const u8 = result['8']
+  u8.push(
+    { id: 'w8', nome: 'Benefício Extra 1', tipo: 'flexivel', saldo: 100.00, limiteDisponivel: 200.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Carteira extra para teste 12+ wallets.', gastoSugeridoPorDia: 0, regrasDeUso: ['Conveniência'] },
+    { id: 'w9', nome: 'Benefício Extra 2', tipo: 'flexivel', saldo: 75.00, limiteDisponivel: 150.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Carteira extra para teste 12+ wallets.', gastoSugeridoPorDia: 0, regrasDeUso: ['Livraria'] },
+    { id: 'w10', nome: 'Alimentação Extra', tipo: 'alimentacao', saldo: 250.00, limiteDisponivel: 500.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Carteira extra alimentação.', gastoSugeridoPorDia: 0, regrasDeUso: ['Supermercados'] },
+    { id: 'w11', nome: 'Transporte Extra', tipo: 'transporte', saldo: 120.00, limiteDisponivel: 300.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Carteira extra transporte.', gastoSugeridoPorDia: 0, regrasDeUso: ['Ônibus','Metrô'] },
+    { id: 'w12', nome: 'Saúde Extra', tipo: 'saude', saldo: 200.00, limiteDisponivel: 400.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Carteira extra saúde.', gastoSugeridoPorDia: 0, regrasDeUso: ['Farmácias','Academia'] },
+    { id: 'w13', nome: 'Cultura Extra', tipo: 'cultura', saldo: 90.00, limiteDisponivel: 200.00, ativo: false, ultimaAtualizacao: NOW_ISO, descricao: 'Carteira inativa extra.', gastoSugeridoPorDia: 0, regrasDeUso: ['Cinema'] },
+  )
+
+  return result
 }
 
 // ─── Cards by User (10+ cards across users) ─────────────────────────────────
@@ -259,6 +276,21 @@ export function buildSeedTransactions() {
       { id: 'tx-072', descricao: 'Livraria Saraiva — livro jurídico', valor: -112.00, tipo: 'debito', categoria: 'Educação', data: dDays(186), status: 'aprovada', walletId: 'w5', walletTipo: 'cultura', merchant: 'Livraria Saraiva' },
       { id: 'tx-073', descricao: 'Smart Fit — mensalidade set', valor: -99.90, tipo: 'debito', categoria: 'Saúde', data: dDays(188), status: 'aprovada', walletId: 'w6', walletTipo: 'saude', merchant: 'Smart Fit' },
       { id: 'tx-074', descricao: 'Compra pendente — Kabum', valor: -599.00, tipo: 'debito', categoria: 'Home Office', data: dDays(183), status: 'pendente', walletId: 'w1', walletTipo: 'flexivel', merchant: 'Kabum' },
+
+      // #189: Transaction with valor=0.00
+      { id: 'tx-075', descricao: 'Cortesia — degustação restaurante parceiro', valor: 0.00, tipo: 'debito', categoria: 'Alimentação', data: dDays(12), status: 'aprovada', walletId: 'w3', walletTipo: 'refeicao', merchant: 'Restaurante Parceiro Cortesia' },
+
+      // #190: Transaction with many decimal places
+      { id: 'tx-076', descricao: 'Ajuste saldo — arredondamento', valor: -123.456789, tipo: 'debito', categoria: 'Ajuste', data: dDays(15), status: 'aprovada', walletId: 'w1', walletTipo: 'flexivel', merchant: 'Ajuste Sistema' },
+
+      // #193: Transaction with Unicode special chars (kanji, emoji)
+      { id: 'tx-077', descricao: 'すし屋 Tanaka 🍣 — jantar especial', valor: -89.90, tipo: 'debito', categoria: 'Alimentação', data: dDays(8), status: 'aprovada', walletId: 'w3', walletTipo: 'refeicao', merchant: 'すし屋 Tanaka 🍣' },
+      { id: 'tx-078', descricao: 'Café ☕ São Paulo — latte art 🎨', valor: -18.50, tipo: 'debito', categoria: 'Alimentação', data: dDays(11), status: 'aprovada', walletId: 'w3', walletTipo: 'refeicao', merchant: 'Café ☕ São Paulo' },
+
+      // #195: Date edge cases — leap year and end-of-month
+      { id: 'tx-079', descricao: 'Compra — dia do bissexto', valor: -50.00, tipo: 'debito', categoria: 'Alimentação', data: '2024-02-29T12:00:00.000Z', status: 'aprovada', walletId: 'w1', walletTipo: 'flexivel', merchant: 'Supermercado Leap Year' },
+      { id: 'tx-080', descricao: 'Compra — último segundo do dia', valor: -25.00, tipo: 'debito', categoria: 'Transporte', data: '2026-03-31T23:59:59.999Z', status: 'aprovada', walletId: 'w4', walletTipo: 'transporte', merchant: 'Uber Midnight' },
+      { id: 'tx-081', descricao: 'Compra — timezone boundary UTC', valor: -15.00, tipo: 'debito', categoria: 'Cultura', data: '2026-01-01T00:00:00.000Z', status: 'aprovada', walletId: 'w5', walletTipo: 'cultura', merchant: 'Ano Novo Digital' },
     ],
     '2': [
       { id: 'tx001', descricao: 'Restaurante Madero', valor: -89.00, tipo: 'debito', categoria: 'Refeição', data: d(3), status: 'aprovada', walletId: 'w1', walletNome: 'Refeição', merchant: 'Restaurante Madero' },
@@ -619,6 +651,9 @@ export const SEED_PARTNERS = [
   { id: 'p8', name: 'Bob\'s Paulista', category: 'lanchonete', address: 'Av. Paulista, 1106 — Bela Vista, SP', distance: '0.3 km', rating: 3.9, acceptedBenefits: ['refeicao','alimentacao','flexivel'], discount: 'Combo especial', isOpen: true, lat: -23.565, lng: -46.652, description: 'Fast food clássico com hambúrgueres e milkshakes.', phone: '(11) 3253-1106', hours: 'Todos os dias 10h–23h' },
   { id: 'p10', name: 'Clínica Einstein Paulista', category: 'saude', address: 'Av. Paulista, 1000 — Bela Vista, SP', distance: '0.7 km', rating: 4.8, acceptedBenefits: ['saude'], discount: null, isOpen: true, lat: -23.568, lng: -46.650, description: 'Unidade ambulatorial do Hospital Israelita Albert Einstein.', phone: '(11) 4000-1000', hours: 'Seg–Sex 07h–19h' },
   { id: 'p13', name: 'Kalunga Papelaria', category: 'papelaria', address: 'R. Augusta, 1050 — Consolação, SP', distance: '0.9 km', rating: 4.1, acceptedBenefits: ['homeoffice','flexivel'], discount: null, isOpen: false, lat: -23.555, lng: -46.660, description: 'Papelaria e informática para escritório e home office.', phone: '(11) 3214-1050', hours: 'Seg–Sex 08h–18h | Sáb 09h–14h' },
+
+  // #192: Partner with very long address
+  { id: 'p24', name: 'Centro de Distribuição Atacadão Macro', category: 'supermercado', address: 'Estrada Municipal Engenheiro Francisco José Longo, Nº 12.345, Galpão 7B, Bloco C, Sala 302, Parque Industrial Avançado de Tecnologia, Distrito de Engenheiro Schmitt, Município de São José dos Campos, Estado de São Paulo, Brasil — CEP 12.245-890', distance: '95.0 km', rating: 3.7, acceptedBenefits: ['alimentacao','flexivel'], discount: null, isOpen: true, lat: -23.2, lng: -45.9, description: 'Centro de distribuição com endereço extremamente longo para teste de layout e truncamento.', phone: '(12) 3921-2345', hours: 'Seg–Sex 06h–18h' },
 ]
 
 // Favorite partner IDs — at least 3 for testing

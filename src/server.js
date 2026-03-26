@@ -7,6 +7,9 @@ import { resolvers, additionalResolvers } from './resolvers.js'
 if (additionalResolvers?.Query) {
   Object.assign(resolvers.Query, additionalResolvers.Query)
 }
+if (additionalResolvers?.Mutation) {
+  Object.assign(resolvers.Mutation, additionalResolvers.Mutation)
+}
 import { reset, getStateSummary, getMutationStats, setFailureMode, getFailureMode } from './state.js'
 import { logRequest, getLogs, clearLogs, getLogStats, getActiveScenarios, setScenario, clearScenarios, getScenario, TEST_SCENARIOS } from './request_logger.js'
 

@@ -153,6 +153,25 @@ const state = {
 
   // #119: Credit consents
   creditConsents: [],           // [CreditConsent]
+
+  // #165-166: Email/phone verification pending
+  pendingEmailChange: {},       // { [userId]: { newEmail, code, expiresAt } }
+  pendingPhoneChange: {},       // { [userId]: { newPhone, code, expiresAt } }
+
+  // #172: NPS feedback dedup
+  npsFeedback: {},              // { [userId]: { score, comment, submittedAt } }
+
+  // #174: Document signatures
+  documentSignatures: {},       // { [documentId]: { signedAt, signatureHash } }
+
+  // #175: Per-query error simulation
+  errorSimulations: {},         // { [queryName]: { errorCode, errorMessage, rate } }
+
+  // #186: Nullable stress test
+  nullableStressEnabled: false,
+
+  // #194: Wallet deduction lock
+  walletLocks: {},              // { [walletId]: boolean } for atomic ops
 }
 
 // ─── Failure simulation ─────────────────────────────────────────────────────
@@ -265,6 +284,13 @@ export function reset() {
   state.hourBankCompensations = []
   state.recentClocks = []
   state.creditConsents = []
+  state.pendingEmailChange = {}
+  state.pendingPhoneChange = {}
+  state.npsFeedback = {}
+  state.documentSignatures = {}
+  state.errorSimulations = {}
+  state.nullableStressEnabled = false
+  state.walletLocks = {}
 
   // Initialize default favorites from seed
   FAVORITE_PARTNER_IDS.forEach(pid => {
@@ -1194,4 +1220,60 @@ export function deleteNotification(userId, notifId) {
   if (idx === -1) return false
   notifs.splice(idx, 1)
   return true
+}
+
+// ─── #165-166: Email/Phone verification ─────────────────────────────────
+export function setPendingEmailChange(userId, newEmail, code) {
+  state.pendingEmailChange[String(userId)] = { newEmail, code, expiresAt: Date.now() + 10 * 60000 }
+}
+export function getPendingEmailChange(userId) { return state.pendingEmailChange[String(userId)] ?? null }
+export function clearPendingEmailChange(userId) { delete state.pendingEmailChange[String(userId)] }
+
+export function setPendingPhoneChange(userId, newPhone, code) {
+  state.pendingPhoneChange[String(userId)] = { newPhone, code, expiresAt: Date.now() + 10 * 60000 }
+}
+export function getPendingPhoneChange(userId) { return state.pendingPhoneChange[String(userId)] ?? null }
+export function clearPendingPhoneChange(userId) { delete state.pendingPhoneChange[String(userId)] }
+
+// ─── #172: NPS Feedback dedup ───────────────────────────────────────────
+export function getNpsFeedback(userId) { return state.npsFeedback[String(userId)] ?? null }
+export function setNpsFeedback(userId, score, comment) {
+  state.npsFeedback[String(userId)] = { score, comment, submittedAt: new Date().toISOString() }
+}
+
+// ─── #174: Document signatures ──────────────────────────────────────────
+export function signDocumentState(documentId) {
+  const sig = { signedAt: new Date().toISOString(), signatureHash: `sha256-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}` }
+  state.documentSignatures[documentId] = sig
+  return sig
+}
+export function getDocumentSignature(documentId) { return state.documentSignatures[documentId] ?? null }
+
+// ─── #175: Per-query error simulation ───────────────────────────────────
+export function setErrorSimulation(queryName, errorCode, errorMessage, rate) {
+  state.errorSimulations[queryName] = { errorCode, errorMessage: errorMessage || `Simulated error for ${queryName}`, rate: rate ?? 1.0 }
+}
+export function getErrorSimulation(queryName) { return state.errorSimulations[queryName] ?? null }
+export function clearErrorSimulation(queryName) { delete state.errorSimulations[queryName] }
+
+// ─── #186: Nullable stress test ─────────────────────────────────────────
+export function isNullableStressEnabled() { return state.nullableStressEnabled }
+export function setNullableStress(enabled) { state.nullableStressEnabled = enabled }
+
+// ─── #194: Atomic wallet deduction ──────────────────────────────────────
+export function atomicDeductWallet(userId, walletId, amount) {
+  const key = `${userId}:${walletId}`
+  if (state.walletLocks[key]) return null // concurrent operation in progress
+  state.walletLocks[key] = true
+  try {
+    const wallet = findWallet(userId, walletId)
+    if (!wallet || wallet.saldo < amount) {
+      return null
+    }
+    wallet.saldo = parseFloat((wallet.saldo - amount).toFixed(2))
+    wallet.ultimaAtualizacao = new Date().toISOString()
+    return wallet
+  } finally {
+    delete state.walletLocks[key]
+  }
 }
