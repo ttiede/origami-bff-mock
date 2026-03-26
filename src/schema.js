@@ -268,8 +268,9 @@ export const typeDefs = /* GraphQL */ `
     myPixKeys: [PixRegisteredKey!]!
 
     # Notifications
-    notifications: [AppNotification!]!
+    notifications(limit: Int, offset: Int): [AppNotification!]!
     notificationPreferences: NotificationPreferences!
+    notificationUnseenCount: Int!
     inbox: [InboxMessage!]!
     surveys: [Survey!]!
 
@@ -278,6 +279,7 @@ export const typeDefs = /* GraphQL */ `
     nearbyPartners(lat: Float!, lng: Float!, radiusKm: Float): [Partner!]!
     partner(id: ID!): Partner
     favoritePartners: [Partner!]!
+    partnerLandingPage(partnerId: ID!): Partner
 
     # Disputes & Reimbursements
     disputes: [Dispute!]!
@@ -342,6 +344,7 @@ export const typeDefs = /* GraphQL */ `
     hrEvents(month: Int!, year: Int!): [HrEvent!]!
     getEvents(month: Int!, year: Int!): [HrEvent!]!
     clockLocks: [ClockLock!]!
+    holidays(year: Int!): [Holiday!]!
 
     # Banks (for TED/Cash Out)
     banks: [Bank!]!
@@ -370,11 +373,14 @@ export const typeDefs = /* GraphQL */ `
     loans: [Loan!]!
     loanDetail(id: ID!): Loan
     creditSimulation(amount: Float!, installments: Int!, type: String!): CreditSimulation
+    creditEligibility: CreditEligibility
+    earlyPayoffSimulation(loanId: ID!): EarlyPayoffSimulation
 
     # Travel
     travels: [TravelRequest!]!
     travelDetail(id: ID!): TravelRequest
     travelPolicy: TravelPolicy
+    perDiem(destination: String!): PerDiem
   }
 
   # ─── Mutations ──────────────────────────────────────────────────────
@@ -438,9 +444,11 @@ export const typeDefs = /* GraphQL */ `
     markNotificationRead(id: ID!): MutationResult!
     markAllNotificationsRead: MutationResult!
     updateNotificationPreferences(input: NotificationPreferencesInput!): NotificationPreferences!
+    deleteNotification(id: ID!): MutationResult!
 
     # Partners
     toggleFavoritePartner(partnerId: ID!): Boolean!
+    updatePartnerBenefitAcceptance(partnerId: ID!, benefits: [String!]!): Partner
 
     # Disputes & Reimbursements
     submitDispute(transactionId: ID!, description: String!, amount: Float!, merchantName: String): Dispute!
@@ -510,6 +518,9 @@ export const typeDefs = /* GraphQL */ `
     clockOut: ClockEntry
     manualClockEntry(date: String!, timeIn: String!, timeOut: String!, reason: String!): ClockEntry
     scheduleVacation(startDate: String!, endDate: String!): VacationPeriod
+    approveManualClockEntry(id: ID!, approved: Boolean!): ClockEntry
+    confirmEventAttendance(eventId: ID!): HrEvent
+    requestHourBankCompensation(minutes: Int!, date: String!, reason: String!): HourBankCompensation
 
     # Credit
     uploadCreditFile(loanId: ID!, fileType: String!, fileName: String!): RequiredFile!
@@ -522,10 +533,12 @@ export const typeDefs = /* GraphQL */ `
     withdrawSavingsGoal(input: SavingsGoalWithdrawInput!): SavingsGoal
 
     # Travel
-    addTravelExpense(travelId: ID!, type: String!, description: String!, amount: Float!, date: String!): TravelExpense!
+    addTravelExpense(travelId: ID!, type: String!, description: String!, amount: Float!, date: String!, receiptUrl: String): TravelExpense!
     createTravel(destination: String!, startDate: String!, endDate: String!, purpose: String!): TravelRequest
     submitTravel(id: ID!): TravelRequest
     cancelTravel(id: ID!): Boolean
+    approveTravel(id: ID!): TravelRequest
+    rejectTravel(id: ID!, reason: String!): TravelRequest
   }
 
   # ─── Flow Token types ──────────────────────────────────────────────
@@ -864,12 +877,24 @@ export const typeDefs = /* GraphQL */ `
     rating: Float!
     acceptedBenefits: [String!]!
     discount: String
+    discountExpiresAt: String
     isOpen: Boolean!
     lat: Float
     lng: Float
     description: String
     phone: String
     hours: String
+    locations: [PartnerLocation!]
+    landingPageUrl: String
+  }
+
+  # #151: Partner multiple locations
+  type PartnerLocation {
+    id: ID!
+    address: String!
+    lat: Float!
+    lng: Float!
+    isOpen: Boolean!
   }
 
   # ─── Dispute & Reimbursement types ──────────────────────────────────
@@ -1086,6 +1111,7 @@ export const typeDefs = /* GraphQL */ `
     latitude: Float
     longitude: Float
     approved: Boolean
+    approvalStatus: String
   }
 
   type TimeSheet {
@@ -1149,6 +1175,23 @@ export const typeDefs = /* GraphQL */ `
     date: String!
     type: String!
     attendees: [String!]!
+    rsvpStatus: String
+  }
+
+  # #111: Brazilian holidays
+  type Holiday {
+    date: String!
+    name: String!
+    type: String!
+  }
+
+  # #109: Hour bank compensation
+  type HourBankCompensation {
+    id: ID!
+    minutes: Int!
+    date: String!
+    status: String!
+    reason: String!
   }
 
   type ClockLock {
@@ -1190,6 +1233,48 @@ export const typeDefs = /* GraphQL */ `
     monthlyPayment: Float!
     nextPaymentDate: String!
     status: String!
+    nextInstallments: [LoanInstallment!]
+  }
+
+  type LoanInstallment {
+    number: Int!
+    dueDate: String!
+    amount: Float!
+    status: String!
+  }
+
+  # #116: Credit eligibility
+  type CreditEligibility {
+    eligible: Boolean!
+    score: Int!
+    maxConsignado: Float!
+    maxPessoal: Float!
+    reasons: [String!]
+  }
+
+  # #119: Credit consent with terms
+  type CreditConsent {
+    id: ID!
+    simulationId: String!
+    termsText: String!
+    expiresAt: String!
+    accepted: Boolean!
+  }
+
+  # #121: Loan early payoff simulation
+  type EarlyPayoffSimulation {
+    loanId: String!
+    currentBalance: Float!
+    discount: Float!
+    earlyPayoffAmount: Float!
+    savedInterest: Float!
+  }
+
+  # #124: Credit denial
+  type CreditDenial {
+    eligible: Boolean!
+    reasons: [String!]!
+    suggestions: [String!]!
   }
 
   # ─── Travel types ─────────────────────────────────────────────────────
@@ -1201,6 +1286,17 @@ export const typeDefs = /* GraphQL */ `
     purpose: String!
     status: String!
     totalBudget: Float!
+    expenses: [TravelExpense!]
+    approver: String
+    approvedAt: String
+  }
+
+  # #133: Per-diem by destination
+  type PerDiem {
+    destination: String!
+    dailyMeal: Float!
+    dailyHotel: Float!
+    dailyTransport: Float!
   }
 
   type TravelExpense {

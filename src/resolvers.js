@@ -78,6 +78,18 @@ import {
   setCardContactless,
   // #088: Boleto duplicate detection
   trackRecentBoleto, isDuplicateBoleto,
+  // #095-#115: HR improvements
+  approveManualClockEntry as stateApproveManualClockEntry,
+  validateClockGeofence,
+  confirmEventAttendance as stateConfirmEventAttendance,
+  addHourBankCompensation,
+  isDuplicateClock, trackRecentClock,
+  // #119: Credit consents
+  addCreditConsent, getCreditConsent,
+  // #146: Partner benefit update
+  updatePartnerBenefits,
+  // #163: Notification delete
+  deleteNotification,
 } from './state.js'
 
 // ── GraphQL Error helper ─────────────────────────────────────────────────────
@@ -477,7 +489,23 @@ export const resolvers = {
     },
 
     // ── Notifications ─────────────────────────────────────────────
-    notifications: (_, __, context) => getNotifications(uid(context)),
+    notifications: (_, { limit, offset }, context) => {
+      let notifs = getNotifications(uid(context))
+      // #158: Auto-remove expired notifications (>30 days old)
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString()
+      notifs = notifs.filter(n => n.data >= thirtyDaysAgo)
+      // #156: Pagination
+      const start = offset ?? 0
+      const end = limit ? start + limit : notifs.length
+      return notifs.slice(start, end)
+    },
+
+    // #154: Notification unseen count
+    notificationUnseenCount: (_, __, context) => {
+      const notifs = getNotifications(uid(context))
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString()
+      return notifs.filter(n => !n.lida && n.data >= thirtyDaysAgo).length
+    },
 
     notificationPreferences: (_, __, context) => getNotifPrefs(uid(context)),
 
@@ -564,26 +592,37 @@ export const resolvers = {
       const userId = uid(context)
       const allEntries = getClockEntries()
       const entries = allEntries.filter(e => e.timestamp.startsWith(date) && e.employeeId === String(userId))
-      // Calculate worked minutes from entries
-      let workedMinutes = 480
-      let breakMinutes = 64
+      // #094: Calculate workedMinutes from actual entry/exit pairs (not hardcoded 480)
+      let workedMinutes = 0
+      let breakMinutes = 0
       if (entries.length >= 2) {
         const sorted = [...entries].sort((a, b) => a.timestamp.localeCompare(b.timestamp))
-        const first = new Date(sorted[0].timestamp)
-        const last = new Date(sorted[sorted.length - 1].timestamp)
-        const totalMs = last - first
-        workedMinutes = Math.round(totalMs / 60000)
-        breakMinutes = Math.max(0, workedMinutes - 480)
-        if (workedMinutes > 480) { workedMinutes = 480 }
+        // Calculate working time: sum intervals between entry→exit pairs
+        let workMs = 0
+        let breakMs = 0
+        for (let i = 0; i < sorted.length - 1; i++) {
+          const curr = sorted[i]
+          const next = sorted[i + 1]
+          const intervalMs = new Date(next.timestamp) - new Date(curr.timestamp)
+          if (curr.type === 'entry' || curr.type === 'break_in') {
+            workMs += intervalMs
+          } else if (curr.type === 'break_out') {
+            breakMs += intervalMs
+          }
+        }
+        workedMinutes = Math.round(workMs / 60000)
+        breakMinutes = Math.round(breakMs / 60000)
       } else if (entries.length === 0) {
         workedMinutes = 0
         breakMinutes = 0
       }
+      // #099: Overtime = extra minutes beyond 480 (8h/day)
+      const extraMinutes = Math.max(0, workedMinutes - 480)
       return {
         date,
         entries,
         workedMinutes,
-        extraMinutes: Math.max(0, workedMinutes - 480),
+        extraMinutes,
         nightMinutes: 0,
         breakMinutes,
       }
@@ -631,7 +670,20 @@ export const resolvers = {
     loanDetail: (_, { id }) => {
       const loan = getLoanById(id)
       if (!loan) throw gqlError(`Empréstimo '${id}' não encontrado.`, 'NOT_FOUND', 404)
-      return loan
+      // #125: Include next 3 installments
+      const nextInstallments = []
+      const baseDate = new Date(loan.nextPaymentDate)
+      for (let i = 0; i < 3 && (loan.installmentsPaid + i) < loan.installmentsTotal; i++) {
+        const dueDate = new Date(baseDate)
+        dueDate.setMonth(dueDate.getMonth() + i)
+        nextInstallments.push({
+          number: loan.installmentsPaid + i + 1,
+          dueDate: dueDate.toISOString().slice(0, 10),
+          amount: loan.monthlyPayment,
+          status: i === 0 ? 'pending' : 'upcoming',
+        })
+      }
+      return { ...loan, nextInstallments }
     },
 
     creditSimulation: (_, { amount, installments, type }) => {
@@ -641,7 +693,16 @@ export const resolvers = {
       if (amount > 50000) {
         throw gqlError('Valor máximo para simulação é R$50.000,00.', 'BAD_REQUEST', 400)
       }
-      const interestRate = 0.018 // 1.8% monthly
+      // #128: Installment range validation (3-48 months)
+      if (installments < 3) {
+        throw gqlError('Mínimo de 3 parcelas.', 'BAD_REQUEST', 400)
+      }
+      if (installments > 48) {
+        throw gqlError('Máximo de 48 parcelas.', 'BAD_REQUEST', 400)
+      }
+      // #117: Different rates per loan type
+      const rateMap = { consignado: 0.012, pessoal: 0.025, antecipacao_13: 0.015 }
+      const interestRate = rateMap[type] ?? 0.018
       const monthlyPayment = parseFloat((amount * interestRate / (1 - Math.pow(1 + interestRate, -installments))).toFixed(2))
       const totalCost = parseFloat((monthlyPayment * installments).toFixed(2))
       const iofTax = parseFloat((amount * 0.0038 + amount * 0.000082 * Math.min(installments * 30, 365)).toFixed(2))
@@ -663,7 +724,9 @@ export const resolvers = {
     travelDetail: (_, { id }) => {
       const travel = getTravelById(id)
       if (!travel) throw gqlError(`Viagem '${id}' não encontrada.`, 'NOT_FOUND', 404)
-      return travel
+      // #129: Include travel expenses
+      const expenses = getTravelExpenses(id)
+      return { ...travel, expenses }
     },
 
     travelPolicy: () => getTravelPolicy(),
@@ -1863,12 +1926,30 @@ export const resolvers = {
       return input
     },
 
+    // #163: Delete notification
+    deleteNotification: (_, { id }, context) => {
+      const userId = requireAuth(context)
+      const result = deleteNotification(userId, id)
+      if (!result) throw gqlError(`Notificação '${id}' não encontrada.`, 'NOT_FOUND', 404)
+      logMutation('deleteNotification', `user:${userId} | notif:${id} → deleted`)
+      return { success: true, message: 'Notificação removida.' }
+    },
+
     // ── Partners ──────────────────────────────────────────────────
     toggleFavoritePartner: (_, { partnerId: id }, context) => {
       const userId = requireAuth(context)
       const result = toggleFavorite(userId, id)
       logMutation('toggleFavoritePartner', `user:${userId} | partner:${id} → ${result ? 'added' : 'removed'}`)
       return result
+    },
+
+    // #146: Partner benefit acceptance update
+    updatePartnerBenefitAcceptance: (_, { partnerId, benefits }, context) => {
+      requireAuth(context)
+      const partner = updatePartnerBenefits(partnerId, benefits)
+      if (!partner) throw gqlError(`Parceiro '${partnerId}' não encontrado.`, 'NOT_FOUND', 404)
+      logMutation('updatePartnerBenefitAcceptance', `partner:${partnerId} → benefits:[${benefits.join(',')}]`)
+      return partner
     },
 
     // ── Disputes ──────────────────────────────────────────────────
@@ -2329,17 +2410,29 @@ export const resolvers = {
     // ── HR ──────────────────────────────────────────────────────
     clockIn: (_, { latitude, longitude }, context) => {
       const userId = requireAuth(context)
+      // #115: Clock duplicate prevention (<1min)
+      if (isDuplicateClock(userId)) {
+        throw gqlError('Registro duplicado. Aguarde pelo menos 1 minuto entre registros de ponto.', 'CONFLICT', 409)
+      }
+      const lat = latitude ?? -23.5630
+      const lng = longitude ?? -46.6543
+      // #096: Geofence validation
+      if (!validateClockGeofence(lat, lng)) {
+        throw gqlError('Você está fora da zona permitida para registro de ponto.', 'GEOFENCE_VIOLATION', 403)
+      }
       const entry = {
         id: nextId('clk'),
         employeeId: userId,
         timestamp: new Date().toISOString(),
         type: 'entry',
         reason: null,
-        latitude: latitude ?? -23.5630,
-        longitude: longitude ?? -46.6543,
+        latitude: lat,
+        longitude: lng,
         approved: true,
+        approvalStatus: 'auto_approved',
       }
       addClockEntry(entry)
+      trackRecentClock(userId)
       logMutation('clockIn', `user:${userId} | ${entry.timestamp}`)
       return entry
     },
@@ -2381,6 +2474,7 @@ export const resolvers = {
         latitude: null,
         longitude: null,
         approved: false,
+        approvalStatus: 'pending', // #095: Manual entry starts as pending
       }
       addClockEntry(entry)
       logMutation('manualClockEntry', `user:${userId} | ${date} ${timeIn}-${timeOut} reason:${reason}`)
@@ -2402,7 +2496,23 @@ export const resolvers = {
       if (end < start) {
         throw gqlError('Data de fim deve ser posterior à data de início.', 'BAD_REQUEST', 400)
       }
-      // Check for overlapping vacation periods
+      const daysCount = Math.ceil((end - start) / 86400000) + 1
+      // #101: Vacation validation (min 5 days, max 30)
+      if (daysCount < 5) {
+        throw gqlError('Período mínimo de férias é 5 dias.', 'BAD_REQUEST', 400)
+      }
+      if (daysCount > 30) {
+        throw gqlError('Período máximo de férias é 30 dias.', 'BAD_REQUEST', 400)
+      }
+      // #103: Balance check (can't exceed availableDays)
+      const balance = getVacationBalance()
+      if (balance && daysCount > balance.availableDays) {
+        throw gqlError(
+          `Saldo insuficiente de férias. Disponível: ${balance.availableDays} dias, solicitado: ${daysCount} dias.`,
+          'INSUFFICIENT_BALANCE', 422
+        )
+      }
+      // #101: Check for overlapping vacation periods
       const existingVacations = getVacationHistory()
       const overlapping = existingVacations.find(v => {
         const vStart = new Date(v.startDate)
@@ -2415,7 +2525,6 @@ export const resolvers = {
           'CONFLICT', 409
         )
       }
-      const daysCount = Math.ceil((end - start) / 86400000) + 1
       const period = {
         id: nextId('vac'),
         startDate,
@@ -2435,7 +2544,16 @@ export const resolvers = {
       if (!simulationId) {
         throw gqlError('simulationId é obrigatório.', 'BAD_REQUEST', 400)
       }
-      logMutation('createCreditConsent', `sim:${simulationId} → consent granted`)
+      // #119: Store consent with terms text + expiration
+      const consent = {
+        id: nextId('consent'),
+        simulationId,
+        termsText: 'Declaro que li e aceito os termos e condições do empréstimo, incluindo taxas de juros, IOF e prazo de pagamento conforme simulação realizada. Estou ciente de que o não pagamento das parcelas acarretará em juros de mora e multa contratual.',
+        expiresAt: new Date(Date.now() + 24 * 3600000).toISOString(), // 24h expiration
+        accepted: true,
+      }
+      addCreditConsent(consent)
+      logMutation('createCreditConsent', `sim:${simulationId} → consent:${consent.id}`)
       return true
     },
 
@@ -2515,6 +2633,22 @@ export const resolvers = {
       if (end < start) {
         throw gqlError('Data de fim deve ser posterior à data de início.', 'BAD_REQUEST', 400)
       }
+      // #140: Advance days enforcement
+      const policy = getTravelPolicy()
+      if (policy && policy.advanceDays) {
+        const minDate = new Date(now.getTime() + policy.advanceDays * 86400000)
+        if (start < minDate) {
+          throw gqlError(`Viagem deve ser criada com pelo menos ${policy.advanceDays} dias de antecedência.`, 'BAD_REQUEST', 400)
+        }
+      }
+      // #138: Travel duplicate detection
+      const existing = getTravels()
+      const duplicate = existing.find(t =>
+        t.destination === destination && t.startDate === startDate && t.endDate === endDate
+      )
+      if (duplicate) {
+        throw gqlError('Viagem duplicada detectada com mesmo destino e datas.', 'CONFLICT', 409)
+      }
       const travel = {
         id: nextId('trv'),
         destination,
@@ -2551,6 +2685,30 @@ export const resolvers = {
       return removed
     },
 
+    // #132: Travel approval workflow
+    approveTravel: (_, { id }, context) => {
+      const userId = requireAuth(context)
+      const travel = getTravelById(id)
+      if (!travel) throw gqlError(`Viagem '${id}' não encontrada.`, 'NOT_FOUND', 404)
+      if (travel.status !== 'pending') throw gqlError('Apenas viagens pendentes podem ser aprovadas.', 'BAD_REQUEST', 400)
+      const updated = updateTravelStatus(id, 'approved')
+      updated.approver = 'mock-manager'
+      updated.approvedAt = new Date().toISOString()
+      logMutation('approveTravel', `user:${userId} | trv:${id} → approved`)
+      return updated
+    },
+
+    rejectTravel: (_, { id, reason }, context) => {
+      const userId = requireAuth(context)
+      const travel = getTravelById(id)
+      if (!travel) throw gqlError(`Viagem '${id}' não encontrada.`, 'NOT_FOUND', 404)
+      if (travel.status !== 'pending') throw gqlError('Apenas viagens pendentes podem ser rejeitadas.', 'BAD_REQUEST', 400)
+      const updated = updateTravelStatus(id, 'rejected')
+      updated.rejectionReason = reason
+      logMutation('rejectTravel', `user:${userId} | trv:${id} → rejected: ${reason}`)
+      return updated
+    },
+
     // ── Missing Mutation resolvers ──────────────────────────────
     discardClockEntry: (_, { id }, context) => {
       requireAuth(context)
@@ -2566,6 +2724,46 @@ export const resolvers = {
       if (!result) throw gqlError(`Registro de ponto '${id}' não encontrado.`, 'NOT_FOUND', 404)
       logMutation('restoreClockEntry', `clk:${id} → restored`)
       return result
+    },
+
+    // #095: Manual clock entry approval workflow
+    approveManualClockEntry: (_, { id, approved }, context) => {
+      requireAuth(context)
+      const entry = stateApproveManualClockEntry(id, approved)
+      if (!entry) throw gqlError(`Registro de ponto '${id}' não encontrado.`, 'NOT_FOUND', 404)
+      logMutation('approveManualClockEntry', `clk:${id} → ${approved ? 'approved' : 'rejected'}`)
+      return entry
+    },
+
+    // #106: HR Event RSVP
+    confirmEventAttendance: (_, { eventId }, context) => {
+      const userId = requireAuth(context)
+      const event = stateConfirmEventAttendance(eventId, userId)
+      if (!event) throw gqlError(`Evento '${eventId}' não encontrado.`, 'NOT_FOUND', 404)
+      logMutation('confirmEventAttendance', `user:${userId} | event:${eventId} → confirmed`)
+      return { ...event, rsvpStatus: 'confirmed' }
+    },
+
+    // #109: Hour bank compensation request
+    requestHourBankCompensation: (_, { minutes, date, reason }, context) => {
+      const userId = requireAuth(context)
+      if (minutes <= 0) throw gqlError('Minutos devem ser maior que zero.', 'BAD_REQUEST', 400)
+      if (!date) throw gqlError('Data é obrigatória.', 'BAD_REQUEST', 400)
+      if (!reason) throw gqlError('Motivo é obrigatório.', 'BAD_REQUEST', 400)
+      const hourBank = getHourBank()
+      if (hourBank && minutes > hourBank.balanceMinutes) {
+        throw gqlError(`Saldo insuficiente no banco de horas. Disponível: ${hourBank.balanceMinutes} minutos.`, 'INSUFFICIENT_BALANCE', 422)
+      }
+      const compensation = {
+        id: nextId('hbc'),
+        minutes,
+        date,
+        status: 'pending',
+        reason,
+      }
+      addHourBankCompensation(compensation)
+      logMutation('requestHourBankCompensation', `user:${userId} | ${minutes}min on ${date}`)
+      return compensation
     },
 
     uploadCreditFile: (_, { loanId, fileType, fileName }, context) => {
@@ -2584,13 +2782,36 @@ export const resolvers = {
       }
     },
 
-    addTravelExpense: (_, { travelId, type, description, amount, date }, context) => {
+    addTravelExpense: (_, { travelId, type, description, amount, date, receiptUrl }, context) => {
       requireAuth(context)
       if (!travelId) throw gqlError('travelId é obrigatório.', 'BAD_REQUEST', 400)
       if (!amount || amount <= 0) throw gqlError('Valor deve ser maior que zero.', 'BAD_REQUEST', 400)
       const travel = getTravelById(travelId)
       if (!travel) throw gqlError(`Viagem '${travelId}' não encontrada.`, 'NOT_FOUND', 404)
+      // #130: Travel policy enforcement
+      const policy = getTravelPolicy()
+      if (policy) {
+        if (type === 'meal' && amount > policy.maxDailyMeal) {
+          throw gqlError(`Despesa de refeição excede o limite diário de R$${policy.maxDailyMeal.toFixed(2)}.`, 'POLICY_VIOLATION', 422)
+        }
+        if (type === 'hotel' && amount > policy.maxHotelNight) {
+          throw gqlError(`Despesa de hotel excede o limite por noite de R$${policy.maxHotelNight.toFixed(2)}.`, 'POLICY_VIOLATION', 422)
+        }
+      }
+      // #134: Receipt requirement for >R$50
+      if (amount > 50 && !receiptUrl) {
+        throw gqlError('Comprovante é obrigatório para despesas acima de R$50,00.', 'BAD_REQUEST', 400)
+      }
+      // #138: Travel duplicate detection
+      const existingExpenses = getTravelExpenses(travelId)
+      const duplicate = existingExpenses.find(e =>
+        e.type === type && e.amount === amount && e.date === date && e.description === description
+      )
+      if (duplicate) {
+        throw gqlError('Despesa duplicada detectada para esta viagem.', 'CONFLICT', 409)
+      }
       const expense = addTravelExpense(travelId, { type, description, amount, date })
+      if (receiptUrl) expense.receiptUrl = receiptUrl
       storeTravelExpense(expense)
       logMutation('addTravelExpense', `trv:${travelId} | ${type} R$${amount}`)
       return expense
@@ -2626,5 +2847,75 @@ export const additionalResolvers = {
       { id: 'ref-004', name: 'Carlos Eduardo', date: '2026-03-23', status: 'creditado', reward: 50.00 },
       { id: 'ref-005', name: 'Fernanda Rocha', date: '2026-03-24', status: 'pendente', reward: 0 },
     ],
+
+    // #111: Brazilian holidays calendar
+    holidays: (_, { year }) => {
+      const holidays = [
+        { date: `${year}-01-01`, name: 'Confraternização Universal', type: 'national' },
+        { date: `${year}-02-16`, name: 'Carnaval', type: 'national' },
+        { date: `${year}-02-17`, name: 'Carnaval', type: 'national' },
+        { date: `${year}-04-03`, name: 'Sexta-feira Santa', type: 'national' },
+        { date: `${year}-04-21`, name: 'Tiradentes', type: 'national' },
+        { date: `${year}-05-01`, name: 'Dia do Trabalho', type: 'national' },
+        { date: `${year}-06-19`, name: 'Corpus Christi', type: 'national' },
+        { date: `${year}-09-07`, name: 'Independência do Brasil', type: 'national' },
+        { date: `${year}-10-12`, name: 'Nossa Senhora Aparecida', type: 'national' },
+        { date: `${year}-11-02`, name: 'Finados', type: 'national' },
+        { date: `${year}-11-15`, name: 'Proclamação da República', type: 'national' },
+        { date: `${year}-11-20`, name: 'Consciência Negra', type: 'national' },
+        { date: `${year}-12-25`, name: 'Natal', type: 'national' },
+        { date: `${year}-01-25`, name: 'Aniversário de São Paulo', type: 'municipal' },
+      ]
+      return holidays
+    },
+
+    // #116: Credit eligibility check
+    creditEligibility: () => ({
+      eligible: true,
+      score: 780,
+      maxConsignado: 30000.00,
+      maxPessoal: 15000.00,
+      reasons: null,
+    }),
+
+    // #121: Loan early payoff simulation
+    earlyPayoffSimulation: (_, { loanId }) => {
+      const loan = getLoanById(loanId)
+      if (!loan) throw gqlError(`Empréstimo '${loanId}' não encontrado.`, 'NOT_FOUND', 404)
+      const discount = parseFloat((loan.remainingBalance * 0.08).toFixed(2))
+      const earlyPayoffAmount = parseFloat((loan.remainingBalance - discount).toFixed(2))
+      const savedInterest = parseFloat((loan.monthlyPayment * (loan.installmentsTotal - loan.installmentsPaid) - loan.remainingBalance).toFixed(2))
+      return {
+        loanId: loan.id,
+        currentBalance: loan.remainingBalance,
+        discount,
+        earlyPayoffAmount,
+        savedInterest: Math.max(0, savedInterest),
+      }
+    },
+
+    // #133: Per-diem by destination
+    perDiem: (_, { destination }) => {
+      const perDiemMap = {
+        'Rio de Janeiro': { dailyMeal: 120, dailyHotel: 450, dailyTransport: 80 },
+        'Curitiba': { dailyMeal: 100, dailyHotel: 350, dailyTransport: 60 },
+        'Recife': { dailyMeal: 90, dailyHotel: 300, dailyTransport: 50 },
+        'Brasília': { dailyMeal: 130, dailyHotel: 500, dailyTransport: 90 },
+        'Salvador': { dailyMeal: 100, dailyHotel: 320, dailyTransport: 55 },
+      }
+      const city = Object.keys(perDiemMap).find(k => destination.toLowerCase().includes(k.toLowerCase()))
+      const rates = city ? perDiemMap[city] : { dailyMeal: 100, dailyHotel: 350, dailyTransport: 60 }
+      return { destination, ...rates }
+    },
+
+    // #148: Partner landing page query
+    partnerLandingPage: (_, { partnerId }) => {
+      const partner = getPartnerById(partnerId)
+      if (!partner) throw gqlError(`Parceiro '${partnerId}' não encontrado.`, 'NOT_FOUND', 404)
+      return {
+        ...partner,
+        landingPageUrl: `https://parceiros.origami.com.br/${partnerId}`,
+      }
+    },
   },
 }

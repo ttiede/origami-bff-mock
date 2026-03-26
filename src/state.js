@@ -144,6 +144,15 @@ const state = {
 
   // #088: Boleto duplicate detection
   recentBoletos: [],            // [{ userId, barcode, amount, timestamp }]
+
+  // #109: Hour bank compensations
+  hourBankCompensations: [],    // [HourBankCompensation]
+
+  // #115: Recent clock timestamps for duplicate prevention
+  recentClocks: [],             // [{ userId, timestamp }]
+
+  // #119: Credit consents
+  creditConsents: [],           // [CreditConsent]
 }
 
 // ─── Failure simulation ─────────────────────────────────────────────────────
@@ -253,6 +262,9 @@ export function reset() {
   state.cardSpendingLimits = {}
   state.cardLockReasons = {}
   state.recentBoletos = []
+  state.hourBankCompensations = []
+  state.recentClocks = []
+  state.creditConsents = []
 
   // Initialize default favorites from seed
   FAVORITE_PARTNER_IDS.forEach(pid => {
@@ -1091,4 +1103,95 @@ export function isDuplicateBoleto(userId, barcode) {
     b.barcode === barcode &&
     b.timestamp >= oneHourAgo
   )
+}
+
+// ─── #095: Manual clock entry approval workflow ──────────────────────────
+export function approveManualClockEntry(id, approved) {
+  const entry = state.clockEntries.find(e => e.id === id)
+  if (!entry) return null
+  entry.approved = approved
+  entry.approvalStatus = approved ? 'approved' : 'rejected'
+  return entry
+}
+
+// ─── #096: Geofence validation for clock-in ──────────────────────────────
+export function validateClockGeofence(lat, lng) {
+  const zones = state.geofenceZones.filter(z => z.isActive && z.type === 'office')
+  if (zones.length === 0) return true // No active zones = no restriction
+  const R = 6371000 // Earth radius in meters
+  return zones.some(z => {
+    const dLat = (z.latitude - lat) * Math.PI / 180
+    const dLng = (z.longitude - lng) * Math.PI / 180
+    const a = Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat * Math.PI / 180) * Math.cos(z.latitude * Math.PI / 180) *
+      Math.sin(dLng / 2) ** 2
+    const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    return dist <= z.radiusMeters
+  })
+}
+
+// ─── #106: HR Event RSVP ─────────────────────────────────────────────────
+export function confirmEventAttendance(eventId, userId) {
+  const event = state.hrEvents.find(e => e.id === eventId)
+  if (!event) return null
+  if (!event.attendees.includes(String(userId))) {
+    event.attendees.push(String(userId))
+  }
+  if (!event.rsvp) event.rsvp = {}
+  event.rsvp[String(userId)] = 'confirmed'
+  return event
+}
+
+// ─── #109: Hour bank compensation ────────────────────────────────────────
+export function addHourBankCompensation(compensation) {
+  state.hourBankCompensations.push(compensation)
+  if (state.hourBank) {
+    state.hourBank.balanceMinutes -= compensation.minutes
+  }
+  return compensation
+}
+
+export function getHourBankCompensations() { return state.hourBankCompensations }
+
+// ─── #115: Clock duplicate prevention (<1min) ───────────────────────────
+export function isDuplicateClock(userId) {
+  const now = Date.now()
+  const oneMinuteAgo = now - 60000
+  return state.recentClocks.some(c =>
+    c.userId === String(userId) &&
+    c.timestamp >= oneMinuteAgo
+  )
+}
+
+export function trackRecentClock(userId) {
+  state.recentClocks.push({ userId: String(userId), timestamp: Date.now() })
+  if (state.recentClocks.length > 100) state.recentClocks.shift()
+}
+
+// ─── #119: Credit consents ──────────────────────────────────────────────
+export function addCreditConsent(consent) {
+  state.creditConsents.push(consent)
+  return consent
+}
+
+export function getCreditConsent(id) {
+  return state.creditConsents.find(c => c.id === id) ?? null
+}
+
+// ─── #146: Partner benefit acceptance update ────────────────────────────
+export function updatePartnerBenefits(partnerId, benefits) {
+  const partner = state.partners.find(p => p.id === partnerId)
+  if (!partner) return null
+  partner.acceptedBenefits = benefits
+  return partner
+}
+
+// ─── #163: Notification delete ──────────────────────────────────────────
+export function deleteNotification(userId, notifId) {
+  const notifs = state.notificationsByUser[String(userId)]
+  if (!notifs) return false
+  const idx = notifs.findIndex(n => n.id === notifId)
+  if (idx === -1) return false
+  notifs.splice(idx, 1)
+  return true
 }
