@@ -64,6 +64,20 @@ import {
   addSavingsGoal, updateSavingsGoal,
   // Per-user clock entries
   getClockEntriesForUser,
+  // #047: Reallocation cooldown
+  getLastReallocationTime, setLastReallocationTime,
+  // #052: Duplicate payment detection
+  trackRecentPayment, isDuplicatePayment,
+  // #062: Per-card spending limits
+  getCardSpendingLimits, setCardSpendingLimits,
+  // #071: Card lock reasons
+  setCardLockReason, getCardLockReason,
+  // #075: Card linked wallet update
+  updateCardLinkedWallets,
+  // #061: Contactless toggle
+  setCardContactless,
+  // #088: Boleto duplicate detection
+  trackRecentBoleto, isDuplicateBoleto,
 } from './state.js'
 
 // ── GraphQL Error helper ─────────────────────────────────────────────────────
@@ -115,12 +129,15 @@ function makeTx(prefix, descricao, amount, walletId = 'w1', categoria = 'Pagamen
 function fullTx(tx) {
   return {
     ...tx,
-    direcao: 'debito',
+    direcao: tx.tipo === 'credito' ? 'credito' : 'debito',
     estabelecimento: tx.merchant,
-    walletTipo: null,
-    nsu: null, codigoAutorizacao: null, cnpjEstabelecimento: null,
-    enderecoEstabelecimento: null, cartaoFinal: null, bandeira: null,
-    mcc: null, mccDescricao: null, parcelas: null, valorParcela: null, nomePortador: null,
+    walletTipo: tx.walletTipo ?? null,
+    nsu: tx.nsu ?? null, codigoAutorizacao: tx.codigoAutorizacao ?? null, cnpjEstabelecimento: tx.cnpjEstabelecimento ?? null,
+    enderecoEstabelecimento: tx.enderecoEstabelecimento ?? null, cartaoFinal: tx.cartaoFinal ?? null, bandeira: tx.bandeira ?? null,
+    mcc: tx.mcc ?? null, mccDescricao: tx.mccDescricao ?? null, parcelas: tx.parcelas ?? null, valorParcela: tx.valorParcela ?? null, nomePortador: tx.nomePortador ?? null,
+    scheduledDate: tx.scheduledDate ?? null,
+    pixDescription: tx.pixDescription ?? null,
+    boletoAuthNumber: tx.boletoAuthNumber ?? null,
   }
 }
 
@@ -128,9 +145,22 @@ function fullTx(tx) {
 const ok = (extra = {}) => ({ success: true, message: null, ...extra })
 
 // ─── Helper: validate wallet transaction ─────────────────────────────────────
+// #028: Per-wallet-type transaction limits
+const WALLET_TYPE_LIMITS = {
+  refeicao: 500.00,
+  transporte: 200.00,
+  alimentacao: 1000.00,
+  cultura: 300.00,
+  saude: 500.00,
+  educacao: 500.00,
+  homeoffice: 2000.00,
+  flexivel: 5000.00,
+}
+
 function validateWalletTransaction(userId, walletId, amount, operationName) {
-  if (amount == null || amount <= 0) {
-    throw gqlError(`Valor inválido para ${operationName}. O valor deve ser maior que zero.`, 'BAD_REQUEST', 400)
+  // #027: Minimum transaction R$0.01
+  if (amount == null || amount < 0.01) {
+    throw gqlError(`Valor inválido para ${operationName}. O valor mínimo é R$ 0,01.`, 'BAD_REQUEST', 400)
   }
   if (!walletId) {
     throw gqlError(`walletId é obrigatório para ${operationName}.`, 'BAD_REQUEST', 400)
@@ -138,6 +168,18 @@ function validateWalletTransaction(userId, walletId, amount, operationName) {
   const wallet = findWallet(userId, walletId)
   if (!wallet) {
     throw gqlError(`Carteira '${walletId}' não encontrada.`, 'NOT_FOUND', 404)
+  }
+  // #026: Check inactive wallet
+  if (!wallet.ativo) {
+    throw gqlError(`Carteira '${wallet.nome}' está inativa. Não é possível realizar ${operationName}.`, 'FORBIDDEN', 403)
+  }
+  // #028: Per-wallet-type transaction limit
+  const typeLimit = WALLET_TYPE_LIMITS[wallet.tipo]
+  if (typeLimit && amount > typeLimit) {
+    throw gqlError(
+      `Limite por transação excedido para carteira tipo '${wallet.tipo}'. Máximo: R$${typeLimit.toFixed(2)}, Valor: R$${amount.toFixed(2)}.`,
+      'TRANSACTION_LIMIT_EXCEEDED', 422
+    )
   }
   if (amount > wallet.saldo) {
     throw gqlError(
@@ -319,6 +361,10 @@ export const resolvers = {
     },
 
     validatePixKey: (_, { chavePix, tipoChave }) => {
+      // #032: Invalid PIX key response for specific test key
+      if (chavePix === 'invalido@test' || chavePix === 'invalido@test.com') {
+        return { valid: false, nomeTitular: '', banco: '', tipoConta: '', errorMessage: 'Chave PIX não encontrada no DICT. Verifique os dados e tente novamente.' }
+      }
       // #030: Real format validation
       const formatError = validatePixKeyFormat(chavePix, tipoChave)
       if (formatError) {
@@ -352,7 +398,16 @@ export const resolvers = {
       }))
     },
 
-    canPixCashOut: () => true,
+    // #083: PIX cash-out eligibility per wallet type
+    canPixCashOut: (_, { walletId }, context) => {
+      const userId = uid(context)
+      if (!walletId) return true
+      const wallet = findWallet(userId, walletId)
+      if (!wallet) return false
+      // Only flexivel and alimentacao wallets can do PIX cash-out
+      const eligibleTypes = ['flexivel', 'alimentacao']
+      return eligibleTypes.includes(wallet.tipo)
+    },
 
     pixCashOutReceipt: (_, { transactionId }) => ({
       id: transactionId,
@@ -372,7 +427,19 @@ export const resolvers = {
 
     // ── Cards ─────────────────────────────────────────────────────
     cards: (_, __, context) => {
-      return getCards(uid(context)).map(({ pin, ...c }) => c)
+      return getCards(uid(context)).map(({ pin, ...c }) => ({
+        ...c,
+        lockReason: getCardLockReason(c.id) || null,
+        spendingLimits: { cardId: c.id, ...getCardSpendingLimits(c.id) },
+        internationalMode: c.internationalMode ?? false,
+      }))
+    },
+
+    // #062: Per-card spending limits query
+    cardSpendingLimits: (_, { cardId }, context) => {
+      requireAuth(context)
+      const limits = getCardSpendingLimits(cardId)
+      return { cardId, ...limits }
     },
 
     cardDelivery: (_, { id: cardId }, context) => {
@@ -652,10 +719,10 @@ export const resolvers = {
       category: 'alimentacao',
     }),
 
-    // ── Validate Boleto (#035) ───────────────────────────────────────
+    // ── Validate Boleto (#035, #036, #086, #089) ─────────────────────
     validateBoleto: (_, { barcode }) => {
       if (!barcode || barcode.length < 44) {
-        return { valid: false, barcode, amount: null, dueDate: null, beneficiary: null, bank: null, errorMessage: 'Código de barras deve ter no mínimo 44 dígitos.' }
+        return { valid: false, barcode, amount: null, dueDate: null, beneficiary: null, bank: null, errorMessage: 'Código de barras deve ter no mínimo 44 dígitos.', juros: null, multa: null, totalComEncargos: null, discount: null, authenticationNumber: null }
       }
       // Parse bank from first 3 digits
       const bankCodes = { '001': 'Banco do Brasil', '033': 'Santander', '104': 'Caixa Econômica', '237': 'Bradesco', '341': 'Itaú Unibanco' }
@@ -663,9 +730,29 @@ export const resolvers = {
       const bank = bankCodes[bankCode] || 'Banco desconhecido'
       // Mock: extract value from positions
       const valueStr = barcode.substring(9, 19) || '0000015000'
-      const amount = parseFloat(valueStr) / 100
+      const baseAmount = parseFloat(valueStr) / 100 || 150.00
+      // #086: Authentication number
+      const authNumber = `AUTH-${barcode.substring(0, 8)}-${Date.now().toString().slice(-6)}`
+
+      // #036: Boleto past due date — add juros + multa
+      // Barcodes starting with "001" simulate past due boleto
+      if (bankCode === '001') {
+        const pastDueDate = new Date(Date.now() - 15 * 86400000).toISOString().substring(0, 10)
+        const multa = parseFloat((baseAmount * 0.02).toFixed(2)) // 2% multa
+        const juros = parseFloat((baseAmount * 0.01 * 15 / 30).toFixed(2)) // 1% ao mês pro-rata 15 dias
+        const totalComEncargos = parseFloat((baseAmount + multa + juros).toFixed(2))
+        return { valid: true, barcode, amount: baseAmount, dueDate: pastDueDate, beneficiary: 'Banco do Brasil S.A. — Cobrança', bank, errorMessage: null, juros, multa, totalComEncargos, discount: null, authenticationNumber: authNumber }
+      }
+
+      // #089: Boleto early payment discount — barcodes starting with "341"
+      if (bankCode === '341') {
+        const futureDueDate = new Date(Date.now() + 15 * 86400000).toISOString().substring(0, 10)
+        const discount = parseFloat((baseAmount * 0.05).toFixed(2)) // 5% desconto por antecipação
+        return { valid: true, barcode, amount: baseAmount, dueDate: futureDueDate, beneficiary: 'Itaú Unibanco — Cobrança Registrada', bank, errorMessage: null, juros: null, multa: null, totalComEncargos: null, discount, authenticationNumber: authNumber }
+      }
+
       const dueDate = new Date(Date.now() + 7 * 86400000).toISOString().substring(0, 10)
-      return { valid: true, barcode, amount: amount || 150.00, dueDate, beneficiary: 'Companhia de Energia Elétrica de SP', bank, errorMessage: null }
+      return { valid: true, barcode, amount: baseAmount, dueDate, beneficiary: 'Companhia de Energia Elétrica de SP', bank, errorMessage: null, juros: null, multa: null, totalComEncargos: null, discount: null, authenticationNumber: authNumber }
     },
 
     // ── Spend Insights (#039) ────────────────────────────────────────
@@ -1127,6 +1214,55 @@ export const resolvers = {
       return key
     },
 
+    // #078: PIX devolution (refund) mutation
+    pixDevolution: (_, { input }, context) => {
+      const userId = requireAuth(context)
+      if (!input.transactionId) {
+        throw gqlError('transactionId é obrigatório para devolução.', 'BAD_REQUEST', 400)
+      }
+      if (!input.amount || input.amount < 0.01) {
+        throw gqlError('Valor mínimo para devolução é R$ 0,01.', 'BAD_REQUEST', 400)
+      }
+      // Find the original transaction
+      const txs = getTransactions(userId)
+      const originalTx = txs.find(t => t.id === input.transactionId)
+      if (!originalTx) {
+        throw gqlError(`Transação '${input.transactionId}' não encontrada.`, 'NOT_FOUND', 404)
+      }
+      if (input.amount > Math.abs(originalTx.valor)) {
+        throw gqlError(`Valor da devolução (R$${input.amount.toFixed(2)}) não pode ser maior que o valor original (R$${Math.abs(originalTx.valor).toFixed(2)}).`, 'BAD_REQUEST', 400)
+      }
+      const walletId = originalTx.walletId || 'w1'
+      creditWallet(userId, walletId, input.amount)
+      const tx = {
+        id: nextId('pix-dev'),
+        descricao: `PIX Devolução — ref: ${input.transactionId}`,
+        valor: input.amount,
+        tipo: 'credito',
+        data: new Date().toISOString(),
+        status: 'aprovada',
+        categoria: 'PIX Devolução',
+        merchant: 'PIX Devolução',
+        walletId,
+        walletNome: null,
+        e2eid: generateE2eid(),
+        pixDescription: input.reason || 'Devolução PIX',
+      }
+      addTransaction(userId, tx)
+      logMutation('pixDevolution', `user:${userId} | ref:${input.transactionId} +R$${input.amount} | e2eid:${tx.e2eid}`)
+      return fullTx(tx)
+    },
+
+    // #082: PIX key portability request
+    requestPixKeyPortability: (_, { input }, context) => {
+      const userId = requireAuth(context)
+      if (!input.key || !input.keyType || !input.originBank) {
+        throw gqlError('Chave, tipo e banco de origem são obrigatórios.', 'BAD_REQUEST', 400)
+      }
+      logMutation('requestPixKeyPortability', `user:${userId} | key:${input.key} type:${input.keyType} from:${input.originBank}`)
+      return { success: true, message: `Solicitação de portabilidade da chave ${input.key} do ${input.originBank} registrada. Prazo de até 7 dias úteis.` }
+    },
+
     // ── Wallet ────────────────────────────────────────────────────
     pixTransfer: (_, { input }, context) => {
       const userId = requireAuth(context)
@@ -1136,6 +1272,10 @@ export const resolvers = {
       }
       if (!input.chavePix) {
         throw gqlError('Chave PIX é obrigatória.', 'BAD_REQUEST', 400)
+      }
+      // #032: Invalid PIX key check in transfer
+      if (input.chavePix === 'invalido@test' || input.chavePix === 'invalido@test.com') {
+        throw gqlError('Chave PIX inválida ou não encontrada no DICT.', 'BAD_REQUEST', 400)
       }
       // #030: PIX key format validation
       if (input.tipoChave) {
@@ -1149,13 +1289,41 @@ export const resolvers = {
           'NOCTURNAL_LIMIT_EXCEEDED', 422
         )
       }
+      // #052: Duplicate payment detection (same amount + merchant within 60s)
+      if (isDuplicatePayment(userId, input.amount, input.chavePix)) {
+        throw gqlError(
+          `Possível pagamento duplicado detectado. Transferência de R$${input.amount.toFixed(2)} para ${input.chavePix} foi realizada há menos de 60 segundos.`,
+          'DUPLICATE_PAYMENT', 409
+        )
+      }
+      // #033: PIX scheduled transfer
+      if (input.scheduledDate) {
+        const schedDate = new Date(input.scheduledDate)
+        if (schedDate <= new Date()) {
+          throw gqlError('Data agendada deve ser futura.', 'BAD_REQUEST', 400)
+        }
+        const wallet = findWallet(userId, input.walletId)
+        if (!wallet) throw gqlError(`Carteira '${input.walletId}' não encontrada.`, 'NOT_FOUND', 404)
+        const tx = makeTx('pix-sched', `PIX agendado para ${input.chavePix}`, input.amount, input.walletId, 'PIX')
+        tx.e2eid = generateE2eid()
+        tx.status = 'agendada'
+        tx.scheduledDate = input.scheduledDate
+        tx.pixDescription = input.description || null
+        addTransaction(userId, tx)
+        trackRecentPayment(userId, input.amount, input.chavePix)
+        logMutation('pixTransfer', `user:${userId} | SCHEDULED for ${input.scheduledDate} | wallet:${input.walletId} R$${input.amount} | e2eid:${tx.e2eid}`)
+        return fullTx(tx)
+      }
       validateWalletTransaction(userId, input.walletId, input.amount, 'PIX')
       const wallet = deductWallet(userId, input.walletId, input.amount)
       addToDailyTotal(userId, input.amount)
       const tx = makeTx('pix', `PIX para ${input.chavePix}`, input.amount, input.walletId, 'PIX')
       // #080: Add e2eid to PIX transactions
       tx.e2eid = generateE2eid()
+      // #085: PIX description persisted
+      tx.pixDescription = input.description || null
       addTransaction(userId, tx)
+      trackRecentPayment(userId, input.amount, input.chavePix)
       logMutation('pixTransfer', `user:${userId} | wallet:${input.walletId} -R$${input.amount} → R$${wallet?.saldo ?? '?'} | e2eid:${tx.e2eid}`)
       return fullTx(tx)
     },
@@ -1184,15 +1352,43 @@ export const resolvers = {
         logMutation('payBoleto', `user:${userId} | SIMULATED FAILURE`)
         throw gqlError('Falha simulada no servidor.', 'INTERNAL_ERROR', 500)
       }
-      if (!(input.barcode || input.barCode)) {
+      const barcode = input.barcode || input.barCode
+      if (!barcode) {
         throw gqlError('Código de barras do boleto é obrigatório.', 'BAD_REQUEST', 400)
+      }
+      // #088: Boleto duplicate detection
+      if (isDuplicateBoleto(userId, barcode)) {
+        throw gqlError(
+          `Boleto duplicado detectado. Este código de barras já foi pago na última hora.`,
+          'DUPLICATE_BOLETO', 409
+        )
+      }
+      // #087: Boleto scheduling (pay on due date)
+      if (input.scheduledDate) {
+        const schedDate = new Date(input.scheduledDate)
+        if (schedDate <= new Date()) {
+          throw gqlError('Data agendada deve ser futura.', 'BAD_REQUEST', 400)
+        }
+        const wallet = findWallet(userId, input.walletId)
+        if (!wallet) throw gqlError(`Carteira '${input.walletId}' não encontrada.`, 'NOT_FOUND', 404)
+        const tx = makeTx('bol-sched', 'Boleto agendado', input.amount, input.walletId, 'Boleto')
+        tx.status = 'agendada'
+        tx.scheduledDate = input.scheduledDate
+        tx.boletoAuthNumber = `AUTH-BOL-${Date.now().toString().slice(-8)}`
+        addTransaction(userId, tx)
+        trackRecentBoleto(userId, barcode, input.amount)
+        logMutation('payBoleto', `user:${userId} | SCHEDULED for ${input.scheduledDate} | wallet:${input.walletId} R$${input.amount}`)
+        return fullTx(tx)
       }
       validateWalletTransaction(userId, input.walletId, input.amount, 'Boleto')
       const wallet = deductWallet(userId, input.walletId, input.amount)
       addToDailyTotal(userId, input.amount)
       const tx = makeTx('bol', 'Pagamento de Boleto', input.amount, input.walletId, 'Boleto')
+      // #086: Boleto authentication number in response
+      tx.boletoAuthNumber = `AUTH-BOL-${Date.now().toString().slice(-8)}`
       addTransaction(userId, tx)
-      logMutation('payBoleto', `user:${userId} | wallet:${input.walletId} -R$${input.amount} → R$${wallet?.saldo ?? '?'}`)
+      trackRecentBoleto(userId, barcode, input.amount)
+      logMutation('payBoleto', `user:${userId} | wallet:${input.walletId} -R$${input.amount} → R$${wallet?.saldo ?? '?'} | auth:${tx.boletoAuthNumber}`)
       return fullTx(tx)
     },
 
@@ -1226,6 +1422,26 @@ export const resolvers = {
       if (!fromWallet) throw gqlError(`Carteira de origem '${input.fromWalletId}' não encontrada.`, 'NOT_FOUND', 404)
       const toWallet = findWallet(userId, input.toWalletId)
       if (!toWallet) throw gqlError(`Carteira de destino '${input.toWalletId}' não encontrada.`, 'NOT_FOUND', 404)
+      // #046: Only flexivel can transfer out
+      if (fromWallet.tipo !== 'flexivel') {
+        throw gqlError(
+          `Somente carteiras do tipo 'flexível' podem transferir saldo. A carteira '${fromWallet.nome}' é do tipo '${fromWallet.tipo}'.`,
+          'FORBIDDEN', 403
+        )
+      }
+      // #047: Reallocation cooldown (1 per day per wallet)
+      const lastRealloc = getLastReallocationTime(userId)
+      if (lastRealloc) {
+        const now = Date.now()
+        const oneDayMs = 24 * 60 * 60 * 1000
+        if (now - lastRealloc < oneDayMs) {
+          const hoursLeft = Math.ceil((oneDayMs - (now - lastRealloc)) / 3600000)
+          throw gqlError(
+            `Limite de realocações atingido. Você pode realizar uma realocação por dia. Tente novamente em ${hoursLeft} hora(s).`,
+            'COOLDOWN', 429
+          )
+        }
+      }
       if (input.amount > fromWallet.saldo) {
         throw gqlError(
           `Saldo insuficiente na carteira '${fromWallet.nome}'. Saldo: R$${fromWallet.saldo.toFixed(2)}.`,
@@ -1234,6 +1450,7 @@ export const resolvers = {
       }
       const from = deductWallet(userId, input.fromWalletId, input.amount)
       const to = creditWallet(userId, input.toWalletId, input.amount)
+      setLastReallocationTime(userId)
       logMutation('reallocateBenefit', `user:${userId} | ${input.fromWalletId} -R$${input.amount} → ${input.toWalletId} +R$${input.amount} | from:R$${from?.saldo ?? '?'} to:R$${to?.saldo ?? '?'}`)
       return !!(from && to)
     },
@@ -1307,6 +1524,18 @@ export const resolvers = {
       if (!input.amount || input.amount <= 0) {
         throw gqlError('Valor deve ser maior que zero.', 'BAD_REQUEST', 400)
       }
+      // #079: PIX fee tiers (free <R$100, 1% R$100-1000, 1.5% >R$1000)
+      let feeRate = 0
+      let feeTier = 'gratuito'
+      if (input.amount >= 100 && input.amount <= 1000) {
+        feeRate = 0.01
+        feeTier = '1%'
+      } else if (input.amount > 1000) {
+        feeRate = 0.015
+        feeTier = '1.5%'
+      }
+      const fee = parseFloat((input.amount * feeRate).toFixed(2))
+      const totalDebited = parseFloat((input.amount + fee).toFixed(2))
       return {
         chavePix: input.chavePix,
         tipoChave: input.tipoChave,
@@ -1315,9 +1544,10 @@ export const resolvers = {
         agencia: '0001',
         conta: '12345-6',
         amount: input.amount,
-        fee: parseFloat((input.amount * 0.015).toFixed(2)),
-        totalDebited: parseFloat((input.amount * 1.015).toFixed(2)),
+        fee,
+        totalDebited,
         previewId: nextId('preview'),
+        feeTier,
       }
     },
 
@@ -1330,15 +1560,30 @@ export const resolvers = {
       if (!input.amount || input.amount <= 0) {
         throw gqlError('Valor deve ser maior que zero.', 'BAD_REQUEST', 400)
       }
-      const totalDebited = parseFloat((input.amount * 1.015).toFixed(2))
+      // #083: PIX cash-out eligibility per wallet type
+      const cashOutWallet = findWallet(userId, input.walletId)
+      if (cashOutWallet) {
+        const eligibleTypes = ['flexivel', 'alimentacao']
+        if (!eligibleTypes.includes(cashOutWallet.tipo)) {
+          throw gqlError(`PIX Cash Out não disponível para carteira tipo '${cashOutWallet.tipo}'. Somente carteiras flexível e alimentação são elegíveis.`, 'FORBIDDEN', 403)
+        }
+      }
+      // #079: PIX fee tiers
+      let feeRate = 0
+      if (input.amount >= 100 && input.amount <= 1000) feeRate = 0.01
+      else if (input.amount > 1000) feeRate = 0.015
+      const fee = parseFloat((input.amount * feeRate).toFixed(2))
+      const totalDebited = parseFloat((input.amount + fee).toFixed(2))
       validateWalletTransaction(userId, input.walletId, totalDebited, 'PIX Cash Out')
       const wallet = deductWallet(userId, input.walletId, totalDebited)
       addToDailyTotal(userId, totalDebited)
       const tx = makeTx('cashout', `PIX Cash Out para ${input.chavePix}`, input.amount, input.walletId, 'PIX Cash Out')
       // #080: Add e2eid to PIX Cash Out transactions
       tx.e2eid = generateE2eid()
+      // #085: PIX description persisted
+      tx.pixDescription = input.description || null
       addTransaction(userId, tx)
-      logMutation('executePixCashOut', `user:${userId} | wallet:${input.walletId} -R$${totalDebited} (fee incl.) → R$${wallet?.saldo ?? '?'} | e2eid:${tx.e2eid}`)
+      logMutation('executePixCashOut', `user:${userId} | wallet:${input.walletId} -R$${totalDebited} (fee:${fee}) → R$${wallet?.saldo ?? '?'} | e2eid:${tx.e2eid}`)
       return fullTx(tx)
     },
 
@@ -1351,7 +1596,7 @@ export const resolvers = {
     },
 
     // ── Cards ─────────────────────────────────────────────────────
-    blockCard: (_, { id: cardId }, context) => {
+    blockCard: (_, { id: cardId, reason }, context) => {
       const userId = requireAuth(context)
       const card = requireCard(userId, cardId)
       // #063: Block operations on cancelled cards
@@ -1361,10 +1606,25 @@ export const resolvers = {
       if (card.status === 'bloqueado') {
         throw gqlError('Cartão já está bloqueado.', 'CONFLICT', 409)
       }
+      // #058: Card expiration check
+      if (card.validade) {
+        const [mm, yy] = card.validade.split('/')
+        const expiry = new Date(2000 + parseInt(yy), parseInt(mm), 0) // last day of exp month
+        if (expiry < new Date()) {
+          throw gqlError('Cartão expirado. Solicite um novo cartão.', 'CARD_EXPIRED', 422)
+        }
+      }
       setCardStatus(userId, cardId, 'bloqueado')
-      logMutation('blockCard', `user:${userId} | card:${cardId} → bloqueado`)
+      // #071: Lock reasons enum (stolen, lost, suspicious, user_request)
+      const lockReason = reason || 'user_request'
+      const validReasons = ['stolen', 'lost', 'suspicious', 'user_request']
+      if (!validReasons.includes(lockReason)) {
+        throw gqlError(`Motivo de bloqueio inválido. Use: ${validReasons.join(', ')}.`, 'BAD_REQUEST', 400)
+      }
+      setCardLockReason(cardId, lockReason)
+      logMutation('blockCard', `user:${userId} | card:${cardId} → bloqueado | reason:${lockReason}`)
       const { pin, ...safe } = card
-      return { ...safe, status: 'bloqueado' }
+      return { ...safe, status: 'bloqueado', lockReason, internationalMode: card.internationalMode ?? false, spendingLimits: { cardId, ...getCardSpendingLimits(cardId) } }
     },
 
     unblockCard: (_, { id: cardId }, context) => {
@@ -1385,6 +1645,15 @@ export const resolvers = {
 
     createVirtualCard: (_, __, context) => {
       const userId = requireAuth(context)
+      // #060: Virtual card limit (max 3 per user)
+      const existingCards = getCards(userId)
+      const activeVirtualCards = existingCards.filter(c => c.tipo === 'virtual' && c.status !== 'cancelado')
+      if (activeVirtualCards.length >= 3) {
+        throw gqlError(
+          `Limite máximo de 3 cartões virtuais atingido. Cancele um cartão virtual existente para criar um novo.`,
+          'LIMIT_EXCEEDED', 422
+        )
+      }
       const user = findUserById(userId)
       const name = user.nome.split(' ').map((w, i) => i < 2 ? w : w[0]).join(' ').toUpperCase()
       const newCard = {
@@ -1463,9 +1732,113 @@ export const resolvers = {
       return { success: true, message: protocol }
     },
 
-    toggleInternationalMode: (_, __, context) => {
-      requireAuth(context)
+    // #057: International mode validation (only physical visa/mastercard)
+    toggleInternationalMode: (_, { id: cardId, enabled }, context) => {
+      const userId = requireAuth(context)
+      const card = requireCard(userId, cardId)
+      if (card.tipo !== 'fisico') {
+        throw gqlError('Modo internacional só está disponível para cartões físicos.', 'BAD_REQUEST', 400)
+      }
+      const allowedBrands = ['visa', 'mastercard']
+      if (!allowedBrands.includes(card.bandeira.toLowerCase())) {
+        throw gqlError(`Modo internacional só está disponível para bandeiras Visa e Mastercard. Seu cartão é ${card.bandeira}.`, 'BAD_REQUEST', 400)
+      }
+      // #058: Card expiration check
+      if (card.validade) {
+        const [mm, yy] = card.validade.split('/')
+        const expiry = new Date(2000 + parseInt(yy), parseInt(mm), 0)
+        if (expiry < new Date()) {
+          throw gqlError('Cartão expirado. Solicite um novo cartão.', 'CARD_EXPIRED', 422)
+        }
+      }
+      card.internationalMode = enabled
+      logMutation('toggleInternationalMode', `user:${userId} | card:${cardId} → international:${enabled}`)
       return true
+    },
+
+    // #061: Contactless toggle mutation
+    toggleContactless: (_, { id: cardId, enabled }, context) => {
+      const userId = requireAuth(context)
+      const card = requireCard(userId, cardId)
+      if (card.status === 'cancelado') {
+        throw gqlError('Operação não permitida em cartão cancelado.', 'FORBIDDEN', 403)
+      }
+      const updated = setCardContactless(userId, cardId, enabled)
+      logMutation('toggleContactless', `user:${userId} | card:${cardId} → contactless:${enabled}`)
+      const { pin, ...safe } = updated
+      return { ...safe, internationalMode: card.internationalMode ?? false, lockReason: getCardLockReason(cardId) || null, spendingLimits: { cardId, ...getCardSpendingLimits(cardId) } }
+    },
+
+    // #062: Per-card spending limits mutation
+    setCardSpendingLimits: (_, { input }, context) => {
+      const userId = requireAuth(context)
+      requireCard(userId, input.cardId)
+      const limits = {}
+      if (input.dailyLimit != null) limits.dailyLimit = input.dailyLimit
+      if (input.monthlyLimit != null) limits.monthlyLimit = input.monthlyLimit
+      if (input.singleTransactionLimit != null) limits.singleTransactionLimit = input.singleTransactionLimit
+      const updated = setCardSpendingLimits(input.cardId, limits)
+      logMutation('setCardSpendingLimits', `user:${userId} | card:${input.cardId} → daily:${updated.dailyLimit} monthly:${updated.monthlyLimit} single:${updated.singleTransactionLimit}`)
+      return { cardId: input.cardId, ...updated }
+    },
+
+    // #064: Card order mutation
+    orderCard: (_, { input }, context) => {
+      const userId = requireAuth(context)
+      const user = findUserById(userId)
+      if (!input.tipo || !input.bandeira) {
+        throw gqlError('Tipo e bandeira do cartão são obrigatórios.', 'BAD_REQUEST', 400)
+      }
+      const validTipos = ['fisico', 'virtual']
+      if (!validTipos.includes(input.tipo)) {
+        throw gqlError(`Tipo inválido. Use: ${validTipos.join(', ')}.`, 'BAD_REQUEST', 400)
+      }
+      const validBandeiras = ['visa', 'mastercard', 'elo']
+      if (!validBandeiras.includes(input.bandeira.toLowerCase())) {
+        throw gqlError(`Bandeira inválida. Use: ${validBandeiras.join(', ')}.`, 'BAD_REQUEST', 400)
+      }
+      // #060: Virtual card limit check
+      if (input.tipo === 'virtual') {
+        const existingCards = getCards(userId)
+        const activeVirtual = existingCards.filter(c => c.tipo === 'virtual' && c.status !== 'cancelado')
+        if (activeVirtual.length >= 3) {
+          throw gqlError('Limite máximo de 3 cartões virtuais atingido.', 'LIMIT_EXCEEDED', 422)
+        }
+      }
+      const name = user.nome.split(' ').map((w, i) => i < 2 ? w : w[0]).join(' ').toUpperCase()
+      const newCard = {
+        id: nextId('c'),
+        tipo: input.tipo,
+        status: input.tipo === 'virtual' ? 'ativo' : 'pendente',
+        bandeira: input.bandeira.toLowerCase(),
+        ultimosDigitos: String(Math.floor(Math.random() * 9000) + 1000),
+        nomePortador: name,
+        validade: '12/30',
+        carteirasVinculadas: input.walletIds || ['Flexível'],
+        contactless: input.tipo === 'fisico',
+        pin: '0000',
+        internationalMode: false,
+      }
+      addCard(userId, newCard)
+      logMutation('orderCard', `user:${userId} | card:${newCard.id} tipo:${newCard.tipo} bandeira:${newCard.bandeira} final:${newCard.ultimosDigitos}`)
+      const { pin, ...safe } = newCard
+      return { ...safe, lockReason: null, spendingLimits: { cardId: newCard.id, ...getCardSpendingLimits(newCard.id) } }
+    },
+
+    // #075: Card linked wallet update
+    updateCardLinkedWallets: (_, { input }, context) => {
+      const userId = requireAuth(context)
+      const card = requireCard(userId, input.cardId)
+      if (card.status === 'cancelado') {
+        throw gqlError('Operação não permitida em cartão cancelado.', 'FORBIDDEN', 403)
+      }
+      if (!input.carteirasVinculadas || input.carteirasVinculadas.length === 0) {
+        throw gqlError('Pelo menos uma carteira deve ser vinculada ao cartão.', 'BAD_REQUEST', 400)
+      }
+      const updated = updateCardLinkedWallets(userId, input.cardId, input.carteirasVinculadas)
+      logMutation('updateCardLinkedWallets', `user:${userId} | card:${input.cardId} → wallets:[${input.carteirasVinculadas.join(',')}]`)
+      const { pin, ...safe } = updated
+      return { ...safe, internationalMode: card.internationalMode ?? false, lockReason: getCardLockReason(input.cardId) || null, spendingLimits: { cardId: input.cardId, ...getCardSpendingLimits(input.cardId) } }
     },
 
     // ── Notifications ─────────────────────────────────────────────

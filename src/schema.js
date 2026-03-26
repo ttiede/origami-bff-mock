@@ -25,6 +25,7 @@ export const typeDefs = /* GraphQL */ `
     tipoChave: String!
     amount: Float!
     description: String
+    scheduledDate: String
   }
 
   input QrPaymentInput {
@@ -37,6 +38,7 @@ export const typeDefs = /* GraphQL */ `
     walletId: ID!
     barcode: String!
     amount: Float!
+    scheduledDate: String
   }
 
   input MobileRechargeInput {
@@ -177,6 +179,42 @@ export const typeDefs = /* GraphQL */ `
     walletId: ID!
   }
 
+  # #078: PIX devolution (refund) input
+  input PixDevolutionInput {
+    transactionId: ID!
+    amount: Float!
+    reason: String
+  }
+
+  # #082: PIX key portability input
+  input PixKeyPortabilityInput {
+    keyType: String!
+    key: String!
+    originBank: String!
+  }
+
+  # #062: Per-card spending limits input
+  input CardSpendingLimitInput {
+    cardId: ID!
+    dailyLimit: Float
+    monthlyLimit: Float
+    singleTransactionLimit: Float
+  }
+
+  # #064: Card order input
+  input CardOrderInput {
+    tipo: String!
+    bandeira: String!
+    walletIds: [String!]!
+    deliveryAddress: String
+  }
+
+  # #075: Card linked wallet update input
+  input CardLinkedWalletInput {
+    cardId: ID!
+    carteirasVinculadas: [String!]!
+  }
+
   input GeoZoneInput {
     id: ID!
     name: String!
@@ -224,6 +262,7 @@ export const typeDefs = /* GraphQL */ `
     cards: [BenefitCard!]!
     cardDelivery(id: ID!): CardDelivery
     revealCard(id: ID!): CardSensitiveData
+    cardSpendingLimits(cardId: ID!): CardSpendingLimits
 
     # PIX Keys
     myPixKeys: [PixRegisteredKey!]!
@@ -378,9 +417,11 @@ export const typeDefs = /* GraphQL */ `
 
     # PIX Keys
     registerPixKey(input: RegisterPixKeyInput!): PixRegisteredKey
+    pixDevolution(input: PixDevolutionInput!): Transaction
+    requestPixKeyPortability(input: PixKeyPortabilityInput!): MutationResult!
 
     # Cards
-    blockCard(id: ID!): BenefitCard!
+    blockCard(id: ID!, reason: String): BenefitCard!
     unblockCard(id: ID!): BenefitCard!
     createVirtualCard: BenefitCard!
     activateCard(id: ID!): BenefitCard
@@ -388,6 +429,10 @@ export const typeDefs = /* GraphQL */ `
     changeCardPin(id: ID!, newPin: String!): MutationResult!
     requestCardReplacement(id: ID!, reason: String!): MutationResult!
     toggleInternationalMode(id: ID!, enabled: Boolean!): Boolean!
+    toggleContactless(id: ID!, enabled: Boolean!): BenefitCard!
+    setCardSpendingLimits(input: CardSpendingLimitInput!): CardSpendingLimits!
+    orderCard(input: CardOrderInput!): BenefitCard!
+    updateCardLinkedWallets(input: CardLinkedWalletInput!): BenefitCard!
 
     # Notifications
     markNotificationRead(id: ID!): MutationResult!
@@ -580,6 +625,11 @@ export const typeDefs = /* GraphQL */ `
     beneficiary: String
     bank: String
     errorMessage: String
+    juros: Float
+    multa: Float
+    totalComEncargos: Float
+    discount: Float
+    authenticationNumber: String
   }
 
   # ─── Spend Insights type ──────────────────────────────────────────
@@ -701,6 +751,9 @@ export const typeDefs = /* GraphQL */ `
     valorParcela: Float
     nomePortador: String
     e2eid: String
+    scheduledDate: String
+    pixDescription: String
+    boletoAuthNumber: String
   }
 
   type CategoryBalance {
@@ -730,6 +783,7 @@ export const typeDefs = /* GraphQL */ `
     fee: Float
     totalDebited: Float
     previewId: String
+    feeTier: String
   }
 
   type NextDeposit {
@@ -755,6 +809,17 @@ export const typeDefs = /* GraphQL */ `
     validade: String!
     carteirasVinculadas: [String!]!
     contactless: Boolean!
+    internationalMode: Boolean
+    lockReason: String
+    spendingLimits: CardSpendingLimits
+  }
+
+  # #062: Per-card spending limits
+  type CardSpendingLimits {
+    cardId: ID!
+    dailyLimit: Float!
+    monthlyLimit: Float!
+    singleTransactionLimit: Float!
   }
 
   type CardDelivery {

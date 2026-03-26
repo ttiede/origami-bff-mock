@@ -129,6 +129,21 @@ const state = {
 
   // PIN validated session per user (for sensitive data access)
   pinValidatedAt: {},      // { [userId]: timestamp }
+
+  // #047: Reallocation cooldown tracking
+  reallocationTimestamps: {},   // { [userId]: timestamp (last reallocation) }
+
+  // #052: Duplicate payment detection
+  recentPayments: [],           // [{ userId, amount, merchant, timestamp }]
+
+  // #062: Per-card spending limits
+  cardSpendingLimits: {},       // { [cardId]: { dailyLimit, monthlyLimit, singleTransactionLimit } }
+
+  // #071: Card lock reasons
+  cardLockReasons: {},          // { [cardId]: string (stolen|lost|suspicious|user_request) }
+
+  // #088: Boleto duplicate detection
+  recentBoletos: [],            // [{ userId, barcode, amount, timestamp }]
 }
 
 // ─── Failure simulation ─────────────────────────────────────────────────────
@@ -233,6 +248,11 @@ export function reset() {
   state.chatMessagesByUser = {}
   state.termsAcceptance = {}
   state.pinValidatedAt = {}
+  state.reallocationTimestamps = {}
+  state.recentPayments = []
+  state.cardSpendingLimits = {}
+  state.cardLockReasons = {}
+  state.recentBoletos = []
 
   // Initialize default favorites from seed
   FAVORITE_PARTNER_IDS.forEach(pid => {
@@ -295,6 +315,7 @@ export function getTransactions(userId) {
     nsu: null, codigoAutorizacao: null, cnpjEstabelecimento: null,
     enderecoEstabelecimento: null, cartaoFinal: null, bandeira: null,
     mcc: null, mccDescricao: null, parcelas: null, valorParcela: null, nomePortador: null,
+    scheduledDate: null, pixDescription: null, boletoAuthNumber: null,
     // Spread tx AFTER defaults so seed receipt data wins
     ...tx,
   }))
@@ -990,4 +1011,84 @@ export function updateSavingsGoal(goalId, updates) {
 // ─── Per-user Clock Entries ────────────────────────────────────────────────
 export function getClockEntriesForUser(userId) {
   return state.clockEntries.filter(e => e.employeeId === String(userId))
+}
+
+// ─── #047: Reallocation Cooldown ─────────────────────────────────────────
+export function getLastReallocationTime(userId) {
+  return state.reallocationTimestamps[String(userId)] ?? null
+}
+
+export function setLastReallocationTime(userId) {
+  state.reallocationTimestamps[String(userId)] = Date.now()
+}
+
+// ─── #052: Duplicate Payment Detection ──────────────────────────────────
+export function trackRecentPayment(userId, amount, merchant) {
+  state.recentPayments.push({ userId: String(userId), amount, merchant, timestamp: Date.now() })
+  // Keep only last 100 entries
+  if (state.recentPayments.length > 100) state.recentPayments.shift()
+}
+
+export function isDuplicatePayment(userId, amount, merchant) {
+  const now = Date.now()
+  const sixtySecondsAgo = now - 60000
+  return state.recentPayments.some(p =>
+    p.userId === String(userId) &&
+    p.amount === amount &&
+    p.merchant === merchant &&
+    p.timestamp >= sixtySecondsAgo
+  )
+}
+
+// ─── #062: Per-card Spending Limits ─────────────────────────────────────
+export function getCardSpendingLimits(cardId) {
+  return state.cardSpendingLimits[cardId] ?? { dailyLimit: 5000, monthlyLimit: 25000, singleTransactionLimit: 5000 }
+}
+
+export function setCardSpendingLimits(cardId, limits) {
+  state.cardSpendingLimits[cardId] = { ...getCardSpendingLimits(cardId), ...limits }
+  return state.cardSpendingLimits[cardId]
+}
+
+// ─── #071: Card Lock Reasons ────────────────────────────────────────────
+export function setCardLockReason(cardId, reason) {
+  state.cardLockReasons[cardId] = reason
+}
+
+export function getCardLockReason(cardId) {
+  return state.cardLockReasons[cardId] ?? null
+}
+
+// ─── #075: Card Linked Wallet Update ────────────────────────────────────
+export function updateCardLinkedWallets(userId, cardId, wallets) {
+  const cards = getCards(userId)
+  const card = cards.find(c => c.id === cardId)
+  if (!card) return null
+  card.carteirasVinculadas = wallets
+  return card
+}
+
+// ─── #061: Contactless Toggle ───────────────────────────────────────────
+export function setCardContactless(userId, cardId, enabled) {
+  const cards = getCards(userId)
+  const card = cards.find(c => c.id === cardId)
+  if (!card) return null
+  card.contactless = enabled
+  return card
+}
+
+// ─── #088: Boleto Duplicate Detection ───────────────────────────────────
+export function trackRecentBoleto(userId, barcode, amount) {
+  state.recentBoletos.push({ userId: String(userId), barcode, amount, timestamp: Date.now() })
+  if (state.recentBoletos.length > 50) state.recentBoletos.shift()
+}
+
+export function isDuplicateBoleto(userId, barcode) {
+  const now = Date.now()
+  const oneHourAgo = now - 3600000
+  return state.recentBoletos.some(b =>
+    b.userId === String(userId) &&
+    b.barcode === barcode &&
+    b.timestamp >= oneHourAgo
+  )
 }

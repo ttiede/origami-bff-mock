@@ -90,6 +90,8 @@ export function buildSeedWallets() {
       { id: 'w1', nome: 'Flexível', tipo: 'flexivel', saldo: 12.30, limiteDisponivel: 400.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Benefício flexível Varejo Express.', gastoSugeridoPorDia: 12.00, regrasDeUso: ['Alimentação','Farmácia','Conveniência'] },
       { id: 'w2', nome: 'Refeição', tipo: 'refeicao', saldo: 189.90, limiteDisponivel: 500.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Vale-refeição para restaurantes.', gastoSugeridoPorDia: 18.00, regrasDeUso: ['Restaurantes','Lanchonetes'] },
       { id: 'w3', nome: 'Transporte', tipo: 'transporte', saldo: 3.50, limiteDisponivel: 250.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Vale-transporte.', gastoSugeridoPorDia: 10.00, regrasDeUso: ['Ônibus','Metrô','Bilhete Único'] },
+      // #026: Inactive wallet for user 11 (test inactive wallet)
+      { id: 'w4', nome: 'Cultura (Inativo)', tipo: 'cultura', saldo: 0.00, limiteDisponivel: 100.00, ativo: false, ultimaAtualizacao: NOW_ISO, descricao: 'Carteira de cultura desativada — benefício suspenso pela empresa.', gastoSugeridoPorDia: 0.00, regrasDeUso: ['Cinema','Teatro','Livros'] },
     ],
     // #185: User 12 (Rafael desligado) with truly empty state — zero wallets
     '12': [],
@@ -106,6 +108,8 @@ export const SEED_CARDS_BY_USER = {
     { id: 'c5', tipo: 'fisico', status: 'bloqueado', bandeira: 'mastercard', ultimosDigitos: '3388', nomePortador: 'LUCAS O SILVA', validade: '09/28', carteirasVinculadas: ['Flexível ACT 2026','Transporte'], contactless: true, pin: '2468', internationalMode: false },
     { id: 'c6', tipo: 'virtual', status: 'cancelado', bandeira: 'elo', ultimosDigitos: '5566', nomePortador: 'LUCAS O SILVA', validade: '01/27', carteirasVinculadas: ['Cultura'], contactless: false, pin: null },
     { id: 'c7', tipo: 'fisico', status: 'ativo', bandeira: 'visa', ultimosDigitos: '9922', nomePortador: 'LUCAS O SILVA', validade: '04/29', carteirasVinculadas: ['Flexível ACT 2026','Benefício Flexível'], contactless: true, pin: '1357', internationalMode: true },
+    // #058: Expired card for testing expiration validation
+    { id: 'c8', tipo: 'fisico', status: 'ativo', bandeira: 'mastercard', ultimosDigitos: '1100', nomePortador: 'LUCAS O SILVA', validade: '01/25', carteirasVinculadas: ['Flexível ACT 2026'], contactless: true, pin: '4646', internationalMode: false },
   ],
   '2': [
     { id: 'c1', tipo: 'fisico', status: 'ativo', bandeira: 'mastercard', ultimosDigitos: '7821', nomePortador: 'MARIA S FERREIRA', validade: '08/27', carteirasVinculadas: ['Refeição','Flexível','Saúde e Bem-estar'], contactless: true, pin: '1111' },
@@ -233,6 +237,19 @@ export function buildSeedTransactions() {
       { id: 'tx-065', descricao: 'Amazon.com.br — parcela 2/3', valor: -43.30, tipo: 'debito', categoria: 'Cultura', data: dDays(162), status: 'aprovada', walletId: 'w5', walletTipo: 'cultura', merchant: 'Amazon', parcelas: 3, valorParcela: 43.30 },
       { id: 'tx-066', descricao: 'Compra cancelada — Submarino', valor: -89.00, tipo: 'debito', categoria: 'Cultura', data: dDays(165), status: 'cancelada', walletId: 'w5', walletTipo: 'cultura', merchant: 'Submarino' },
       { id: 'tx-067', descricao: 'PIX recebido — reembolso', valor: 45.00, tipo: 'credito', categoria: 'Alimentação', data: dDays(168), status: 'aprovada', walletId: 'w1', walletTipo: 'flexivel', merchant: 'PIX' },
+
+      // ── Special test transactions (#048, #049, #050, #045, #038) ──────
+      // #048: Transaction near R$50,000 limit
+      { id: 'tx-edge-max', descricao: 'Transferência alto valor — equipamento industrial', valor: -49999.99, tipo: 'debito', categoria: 'Pagamento', data: dDays(15), status: 'aprovada', walletId: 'w8', walletTipo: 'flexivel', merchant: 'Indústria Nacional LTDA' },
+      // #049: Minimum value transaction R$0.01
+      { id: 'tx-edge-min', descricao: 'Teste valor mínimo — centavo', valor: -0.01, tipo: 'debito', categoria: 'Alimentação', data: dDays(16), status: 'aprovada', walletId: 'w1', walletTipo: 'flexivel', merchant: 'Padaria Teste' },
+      // #050: Special chars in description
+      { id: 'tx-special-chars', descricao: 'Café & Bistrô "Lê Petit" — Açaí 100% + croissant (pão-de-queijo/baguete) R$', valor: -32.50, tipo: 'debito', categoria: 'Alimentação', data: dDays(17), status: 'aprovada', walletId: 'w3', walletTipo: 'refeicao', merchant: 'Café & Bistrô "Lê Petit"' },
+      // #045: Installment purchase (parcelas)
+      { id: 'tx-parcela-01', descricao: 'Magazine Luiza — TV 55" parcela 1/10', valor: -299.99, tipo: 'debito', categoria: 'Flexível', data: dDays(10), status: 'aprovada', walletId: 'w1', walletTipo: 'flexivel', merchant: 'Magazine Luiza', parcelas: 10, valorParcela: 299.99, nsu: '900001', codigoAutorizacao: 'AUTH-PARC-001', cnpjEstabelecimento: '47.960.950/0001-21', enderecoEstabelecimento: 'Av. Marginal Direita, 500 — Franca, SP', cartaoFinal: '4625', bandeira: 'Visa', mcc: '5732', mccDescricao: 'Eletrônicos', nomePortador: 'LUCAS O SILVA' },
+      // #038: Future statement entries (scheduled deposits)
+      { id: 'tx-future-01', descricao: 'Depósito agendado — Bônus trimestral', valor: 1500.00, tipo: 'credito', categoria: 'Crédito', data: dFuture(7), status: 'agendada', walletId: 'w1', walletTipo: 'flexivel', merchant: 'Origami', scheduledDate: dFuture(7).substring(0, 10) },
+      { id: 'tx-future-02', descricao: 'Depósito agendado — Crédito cultura abril', valor: 200.00, tipo: 'credito', categoria: 'Crédito', data: dFuture(12), status: 'agendada', walletId: 'w5', walletTipo: 'cultura', merchant: 'Origami', scheduledDate: dFuture(12).substring(0, 10) },
 
       // ── Month -6 (~180 days ago) — 7 transactions ──────────────────────
       { id: 'tx-068', descricao: 'Crédito Saúde Set', valor: 500.00, tipo: 'credito', categoria: 'Crédito', data: dDays(180), status: 'aprovada', walletId: 'w6', walletTipo: 'saude', merchant: 'Origami' },
