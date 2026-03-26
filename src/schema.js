@@ -101,6 +101,37 @@ export const typeDefs = /* GraphQL */ `
     newCategory: String!
   }
 
+  input AcceptTermsInput {
+    version: String!
+  }
+
+  input RegisterPixKeyInput {
+    type: String!
+    key: String!
+  }
+
+  input CreateSavingsGoalInput {
+    name: String!
+    targetAmount: Float!
+    deadline: String
+    walletId: ID
+  }
+
+  input SavingsGoalDepositInput {
+    goalId: ID!
+    amount: Float!
+  }
+
+  input SavingsGoalWithdrawInput {
+    goalId: ID!
+    amount: Float!
+  }
+
+  input SendChatMessageInput {
+    message: String!
+    category: String
+  }
+
   input CreateBalanceRequestInput {
     walletId: ID!
     amount: Float!
@@ -182,18 +213,26 @@ export const typeDefs = /* GraphQL */ `
     transactions(walletId: ID, dateFrom: String, dateTo: String, categoria: String, direcao: String, search: String, limit: Int, offset: Int): [Transaction!]!
     balancesByCategory: [CategoryBalance!]!
     validatePixKey(chavePix: String!, tipoChave: String!): PixKeyInfo
+    validateBoleto(barcode: String!): BoletoValidation
     nextDeposits(walletId: ID): [NextDeposit!]!
     canPixCashOut(walletId: ID!): Boolean!
     pixCashOutReceipt(transactionId: ID!): Transaction
+    spendInsights(months: Int): SpendInsights
+    statementHome(limit: Int): [Transaction!]!
 
     # Cards
     cards: [BenefitCard!]!
     cardDelivery(id: ID!): CardDelivery
     revealCard(id: ID!): CardSensitiveData
 
+    # PIX Keys
+    myPixKeys: [PixRegisteredKey!]!
+
     # Notifications
     notifications: [AppNotification!]!
     notificationPreferences: NotificationPreferences!
+    inbox: [InboxMessage!]!
+    surveys: [Survey!]!
 
     # Partners
     partners(category: String, benefit: String, search: String): [Partner!]!
@@ -230,6 +269,13 @@ export const typeDefs = /* GraphQL */ `
 
     # Help Center
     faqs: [Faq!]!
+    chatHistory: [ChatMessage!]!
+
+    # Documents
+    documents: [UserDocument!]!
+
+    # Copilot AI
+    copilotAdvice: CopilotAdvice
 
     # Expenses
     expenses: [Expense!]!
@@ -296,6 +342,8 @@ export const typeDefs = /* GraphQL */ `
   type Mutation {
     # Auth
     login(input: LoginInput!): TokenPair
+    refreshToken(refreshToken: String!): TokenPair
+    acceptTerms(input: AcceptTermsInput!): MutationResult!
     logout(sessionId: ID): MutationResult!
     forgotPassword(cpf: String!, method: String): MutationResult!
     verifyOtp(cpf: String!, otp: String!): VerifyOtpResult!
@@ -327,6 +375,9 @@ export const typeDefs = /* GraphQL */ `
     pixCashOutPreview(input: PixCashOutPreviewInput!): PixCashOutPreview
     executePixCashOut(input: PixCashOutInput!): Transaction
     statementExport(input: ExportStatementInput!): StatementExport
+
+    # PIX Keys
+    registerPixKey(input: RegisterPixKeyInput!): PixRegisteredKey
 
     # Cards
     blockCard(id: ID!): BenefitCard!
@@ -367,6 +418,9 @@ export const typeDefs = /* GraphQL */ `
     # Approvals
     approveAction(id: ID!): Approval
     rejectAction(id: ID!, reason: String!): Approval
+
+    # Support Chat
+    sendChatMessage(input: SendChatMessageInput!): ChatMessage
 
     # Feedback
     submitFeedback(score: Int!, tags: [String!], comment: String): MutationResult!
@@ -416,6 +470,11 @@ export const typeDefs = /* GraphQL */ `
     uploadCreditFile(loanId: ID!, fileType: String!, fileName: String!): RequiredFile!
     createCreditConsent(simulationId: ID!): Boolean
     executeCreditOperation(consentId: ID!): Boolean
+
+    # Savings Goals
+    createSavingsGoal(input: CreateSavingsGoalInput!): SavingsGoal
+    depositSavingsGoal(input: SavingsGoalDepositInput!): SavingsGoal
+    withdrawSavingsGoal(input: SavingsGoalWithdrawInput!): SavingsGoal
 
     # Travel
     addTravelExpense(travelId: ID!, type: String!, description: String!, amount: Float!, date: String!): TravelExpense!
@@ -512,6 +571,99 @@ export const typeDefs = /* GraphQL */ `
     tipo: String!
   }
 
+  # ─── Boleto Validation type ─────────────────────────────────────────
+  type BoletoValidation {
+    valid: Boolean!
+    barcode: String!
+    amount: Float
+    dueDate: String
+    beneficiary: String
+    bank: String
+    errorMessage: String
+  }
+
+  # ─── Spend Insights type ──────────────────────────────────────────
+  type SpendInsightCategory {
+    category: String!
+    total: Float!
+    count: Int!
+    percentOfTotal: Float!
+  }
+
+  type SpendInsights {
+    month: String!
+    totalSpent: Float!
+    categories: [SpendInsightCategory!]!
+    topMerchant: String
+    averageTransaction: Float!
+    comparedToPreviousMonth: Float
+  }
+
+  # ─── PIX Registered Key type ──────────────────────────────────────
+  type PixRegisteredKey {
+    id: ID!
+    type: String!
+    key: String!
+    createdAt: String!
+    status: String!
+  }
+
+  # ─── Inbox / Messaging type ───────────────────────────────────────
+  type InboxMessage {
+    id: ID!
+    from: String!
+    subject: String!
+    body: String!
+    date: String!
+    read: Boolean!
+    category: String!
+  }
+
+  # ─── Survey type ──────────────────────────────────────────────────
+  type Survey {
+    id: ID!
+    title: String!
+    description: String!
+    questions: [SurveyQuestion!]!
+    expiresAt: String!
+    completed: Boolean!
+  }
+
+  type SurveyQuestion {
+    id: ID!
+    text: String!
+    type: String!
+    options: [String!]
+  }
+
+  # ─── Chat Message type ────────────────────────────────────────────
+  type ChatMessage {
+    id: ID!
+    sender: String!
+    message: String!
+    timestamp: String!
+    category: String
+  }
+
+  # ─── User Document type ───────────────────────────────────────────
+  type UserDocument {
+    id: ID!
+    title: String!
+    type: String!
+    url: String!
+    issuedAt: String!
+    expiresAt: String
+  }
+
+  # ─── Copilot AI type ──────────────────────────────────────────────
+  type CopilotAdvice {
+    summary: String!
+    tips: [String!]!
+    savingsOpportunity: Float
+    topCategory: String
+    monthlyBudgetStatus: String
+  }
+
   # ─── Wallet types ───────────────────────────────────────────────────
   type Wallet {
     id: ID!
@@ -548,6 +700,7 @@ export const typeDefs = /* GraphQL */ `
     parcelas: Int
     valorParcela: Float
     nomePortador: String
+    e2eid: String
   }
 
   type CategoryBalance {

@@ -91,11 +91,8 @@ export function buildSeedWallets() {
       { id: 'w2', nome: 'Refeição', tipo: 'refeicao', saldo: 189.90, limiteDisponivel: 500.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Vale-refeição para restaurantes.', gastoSugeridoPorDia: 18.00, regrasDeUso: ['Restaurantes','Lanchonetes'] },
       { id: 'w3', nome: 'Transporte', tipo: 'transporte', saldo: 3.50, limiteDisponivel: 250.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Vale-transporte.', gastoSugeridoPorDia: 10.00, regrasDeUso: ['Ônibus','Metrô','Bilhete Único'] },
     ],
-    '12': [
-      { id: 'w1', nome: 'Alimentação', tipo: 'alimentacao', saldo: 0.00, limiteDisponivel: 0.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Encerrado.', gastoSugeridoPorDia: 0.00, regrasDeUso: [] },
-      { id: 'w2', nome: 'Refeição', tipo: 'refeicao', saldo: 0.00, limiteDisponivel: 0.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Encerrado.', gastoSugeridoPorDia: 0.00, regrasDeUso: [] },
-      { id: 'w3', nome: 'Transporte', tipo: 'transporte', saldo: 0.00, limiteDisponivel: 0.00, ativo: true, ultimaAtualizacao: NOW_ISO, descricao: 'Encerrado.', gastoSugeridoPorDia: 0.00, regrasDeUso: [] },
-    ],
+    // #185: User 12 (Rafael desligado) with truly empty state — zero wallets
+    '12': [],
   }
 }
 
@@ -150,10 +147,8 @@ export const SEED_CARDS_BY_USER = {
     { id: 'c1', tipo: 'fisico', status: 'ativo', bandeira: 'visa', ultimosDigitos: '2277', nomePortador: 'JULIANA C NETO', validade: '11/27', carteirasVinculadas: ['Flexível','Refeição','Transporte'], contactless: true, pin: '1010' },
     { id: 'c2', tipo: 'virtual', status: 'bloqueado', bandeira: 'elo', ultimosDigitos: '8833', nomePortador: 'JULIANA C NETO', validade: '05/28', carteirasVinculadas: ['Flexível'], contactless: false, pin: '2020' },
   ],
-  '12': [
-    { id: 'c1', tipo: 'fisico', status: 'cancelado', bandeira: 'visa', ultimosDigitos: '8844', nomePortador: 'RAFAEL S PEREIRA', validade: '09/26', carteirasVinculadas: ['Alimentação','Refeição','Transporte'], contactless: true, pin: '0000' },
-    { id: 'c2', tipo: 'virtual', status: 'cancelado', bandeira: 'mastercard', ultimosDigitos: '6622', nomePortador: 'RAFAEL S PEREIRA', validade: '09/26', carteirasVinculadas: ['Alimentação'], contactless: false, pin: '0000' },
-  ],
+  // #185: User 12 (Rafael desligado) with truly empty state — zero cards
+  '12': [],
 }
 
 // ─── Transactions by User (200+ across all users) ───────────────────────────
@@ -1009,13 +1004,18 @@ export const SEED_DIGITAL_WALLET_CARDS = [
 // ─── Clock Entries (5 for today) ────────────────────────────────────────────
 export function buildSeedClockEntries() {
   const today = new Date().toISOString().slice(0, 10)
-  return [
+  const user1Entries = [
     { id: 'clk-001', employeeId: '1', timestamp: `${today}T08:02:15.000Z`, type: 'entry', reason: null, latitude: -23.5630, longitude: -46.6543, approved: true },
     { id: 'clk-002', employeeId: '1', timestamp: `${today}T12:01:30.000Z`, type: 'break_out', reason: null, latitude: -23.5630, longitude: -46.6543, approved: true },
     { id: 'clk-003', employeeId: '1', timestamp: `${today}T13:05:22.000Z`, type: 'break_in', reason: null, latitude: -23.5646, longitude: -46.6527, approved: true },
     { id: 'clk-004', employeeId: '1', timestamp: `${today}T15:30:00.000Z`, type: 'break_out', reason: 'Consulta médica', latitude: -23.5630, longitude: -46.6543, approved: true },
     { id: 'clk-005', employeeId: '1', timestamp: `${today}T16:45:10.000Z`, type: 'break_in', reason: 'Retorno consulta médica', latitude: -23.5630, longitude: -46.6543, approved: false },
   ]
+  // Include per-user entries (#093)
+  const perUserEntries = buildSeedClockEntriesByUser()
+  const allEntries = [...user1Entries]
+  Object.values(perUserEntries).forEach(entries => allEntries.push(...entries))
+  return allEntries
 }
 
 // ─── Hour Bank ──────────────────────────────────────────────────────────────
@@ -1225,6 +1225,76 @@ export function buildSeedTransportCards() {
     { id: 'tc-002', type: 'bom', number: '6012 **** **** 3301', balance: 15.00, lastUsed: dDays(4), status: 'ativo' },
     { id: 'tc-003', type: 'bilhete_unico', number: '7891 **** **** 8813', balance: 0.00, lastUsed: dDays(30), status: 'bloqueado' },
   ]
+}
+
+// ─── PIX Keys by User ──────────────────────────────────────────────────────
+export function buildSeedPixKeys() {
+  return {
+    '1': [
+      { id: 'pix-key-001', type: 'cpf', key: '611.512.751-31', createdAt: dDays(90), status: 'active' },
+      { id: 'pix-key-002', type: 'email', key: 'lucas.silva@techsolutions.com.br', createdAt: dDays(60), status: 'active' },
+      { id: 'pix-key-003', type: 'phone', key: '+5511998765432', createdAt: dDays(30), status: 'active' },
+    ],
+    '2': [
+      { id: 'pix-key-004', type: 'cpf', key: '722.533.250-31', createdAt: dDays(45), status: 'active' },
+      { id: 'pix-key-005', type: 'email', key: 'maria.ferreira@industriaabc.com.br', createdAt: dDays(30), status: 'active' },
+    ],
+    '3': [
+      { id: 'pix-key-006', type: 'random', key: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', createdAt: dDays(20), status: 'active' },
+    ],
+    '8': [
+      { id: 'pix-key-007', type: 'cpf', key: '468.819.736-59', createdAt: dDays(120), status: 'active' },
+      { id: 'pix-key-008', type: 'email', key: 'diego.santos@megacorp.com.br', createdAt: dDays(100), status: 'active' },
+      { id: 'pix-key-009', type: 'phone', key: '+5511921098765', createdAt: dDays(80), status: 'active' },
+      { id: 'pix-key-010', type: 'random', key: 'f9e8d7c6-b5a4-3210-fedc-ba0987654321', createdAt: dDays(60), status: 'active' },
+    ],
+    '12': [],
+  }
+}
+
+// ─── Per-User Clock Entries ────────────────────────────────────────────────
+export function buildSeedClockEntriesByUser() {
+  const today = new Date().toISOString().slice(0, 10)
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+  return {
+    '2': [
+      { id: 'clk-u2-001', employeeId: '2', timestamp: `${today}T08:15:00.000Z`, type: 'entry', reason: null, latitude: -22.9068, longitude: -43.1729, approved: true },
+      { id: 'clk-u2-002', employeeId: '2', timestamp: `${today}T12:00:00.000Z`, type: 'break_out', reason: null, latitude: -22.9068, longitude: -43.1729, approved: true },
+      { id: 'clk-u2-003', employeeId: '2', timestamp: `${today}T13:10:00.000Z`, type: 'break_in', reason: null, latitude: -22.9068, longitude: -43.1729, approved: true },
+    ],
+    '3': [
+      { id: 'clk-u3-001', employeeId: '3', timestamp: `${today}T07:55:00.000Z`, type: 'entry', reason: null, latitude: -19.9191, longitude: -43.9386, approved: true },
+      { id: 'clk-u3-002', employeeId: '3', timestamp: `${today}T12:05:00.000Z`, type: 'break_out', reason: null, latitude: -19.9191, longitude: -43.9386, approved: true },
+    ],
+    '7': [
+      { id: 'clk-u7-001', employeeId: '7', timestamp: `${today}T09:00:00.000Z`, type: 'entry', reason: null, latitude: -23.5630, longitude: -46.6543, approved: true },
+      { id: 'clk-u7-002', employeeId: '7', timestamp: `${yesterday}T09:02:00.000Z`, type: 'entry', reason: null, latitude: -23.5630, longitude: -46.6543, approved: true },
+      { id: 'clk-u7-003', employeeId: '7', timestamp: `${yesterday}T18:05:00.000Z`, type: 'exit', reason: null, latitude: -23.5630, longitude: -46.6543, approved: true },
+    ],
+    '8': [
+      { id: 'clk-u8-001', employeeId: '8', timestamp: `${today}T09:30:00.000Z`, type: 'entry', reason: null, latitude: -23.5630, longitude: -46.6543, approved: true },
+    ],
+    '11': [
+      { id: 'clk-u11-001', employeeId: '11', timestamp: `${today}T08:00:00.000Z`, type: 'entry', reason: null, latitude: -22.9070, longitude: -47.0616, approved: true },
+      { id: 'clk-u11-002', employeeId: '11', timestamp: `${today}T12:00:00.000Z`, type: 'break_out', reason: null, latitude: -22.9070, longitude: -47.0616, approved: true },
+      { id: 'clk-u11-003', employeeId: '11', timestamp: `${today}T13:00:00.000Z`, type: 'break_in', reason: null, latitude: -22.9070, longitude: -47.0616, approved: true },
+      { id: 'clk-u11-004', employeeId: '11', timestamp: `${today}T18:00:00.000Z`, type: 'exit', reason: null, latitude: -22.9070, longitude: -47.0616, approved: true },
+    ],
+  }
+}
+
+// ─── Per-User Payslips (varying salaries) ──────────────────────────────────
+export function buildSeedPayslipsByUser() {
+  // salary map for users other than user 1
+  return {
+    '2': { gross: 15000.00, role: 'Gerente de RH' },
+    '3': { gross: 8500.00, role: 'Analista Financeiro' },
+    '5': { gross: 10000.00, role: 'Coordenadora de Marketing' },
+    '7': { gross: 2500.00, role: 'Estagiária de Desenvolvimento' },
+    '8': { gross: 35000.00, role: 'Diretor de Operações' },
+    '9': { gross: 18000.00, role: 'Advogada Sênior' },
+    '11': { gross: 6500.00, role: 'Supervisora de Vendas' },
+  }
 }
 
 // ─── Static data (banners, FAQs, external benefits, rewards, sessions, security) ─

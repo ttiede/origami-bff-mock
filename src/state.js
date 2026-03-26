@@ -42,6 +42,9 @@ import {
   buildSeedMarketplaceOffers,
   buildSeedSavingsGoals,
   buildSeedTransportCards,
+  buildSeedPixKeys,
+  buildSeedClockEntriesByUser,
+  buildSeedPayslipsByUser,
 } from './seeds.js'
 
 import {
@@ -114,6 +117,18 @@ const state = {
 
   // Travel expenses
   travelExpenses: [],      // [TravelExpense]
+
+  // PIX registered keys per user
+  pixKeysByUser: {},       // { [userId]: [PixRegisteredKey] }
+
+  // Chat messages per user
+  chatMessagesByUser: {},  // { [userId]: [ChatMessage] }
+
+  // Terms acceptance per user
+  termsAcceptance: {},     // { [userId]: { version, acceptedAt } }
+
+  // PIN validated session per user (for sensitive data access)
+  pinValidatedAt: {},      // { [userId]: timestamp }
 }
 
 // ─── Failure simulation ─────────────────────────────────────────────────────
@@ -214,6 +229,10 @@ export function reset() {
   state.scheduledDeposits = []
   state.transactionPins = {}
   state.travelExpenses = []
+  state.pixKeysByUser = buildSeedPixKeys()
+  state.chatMessagesByUser = {}
+  state.termsAcceptance = {}
+  state.pinValidatedAt = {}
 
   // Initialize default favorites from seed
   FAVORITE_PARTNER_IDS.forEach(pid => {
@@ -908,4 +927,67 @@ export function resetFailedAttempts(userId) {
   const user = findUserById(userId)
   if (user) user.tentativasFalhas = 0
   return user
+}
+
+// ─── PIX Keys ──────────────────────────────────────────────────────────────
+export function getPixKeys(userId) {
+  return state.pixKeysByUser[String(userId)] ?? []
+}
+
+export function addPixKey(userId, key) {
+  const uid = String(userId)
+  if (!state.pixKeysByUser[uid]) state.pixKeysByUser[uid] = []
+  state.pixKeysByUser[uid].push(key)
+  return key
+}
+
+// ─── Chat Messages ─────────────────────────────────────────────────────────
+export function getChatMessages(userId) {
+  return state.chatMessagesByUser[String(userId)] ?? []
+}
+
+export function addChatMessage(userId, msg) {
+  const uid = String(userId)
+  if (!state.chatMessagesByUser[uid]) state.chatMessagesByUser[uid] = []
+  state.chatMessagesByUser[uid].push(msg)
+  return msg
+}
+
+// ─── Terms Acceptance ──────────────────────────────────────────────────────
+export function acceptTerms(userId, version) {
+  state.termsAcceptance[String(userId)] = { version, acceptedAt: new Date().toISOString() }
+}
+
+export function getTermsAcceptance(userId) {
+  return state.termsAcceptance[String(userId)] ?? null
+}
+
+// ─── PIN Validation Session ────────────────────────────────────────────────
+export function setPinValidated(userId) {
+  state.pinValidatedAt[String(userId)] = Date.now()
+}
+
+export function isPinRecentlyValidated(userId) {
+  const ts = state.pinValidatedAt[String(userId)]
+  if (!ts) return false
+  // Valid for 5 minutes
+  return (Date.now() - ts) < 5 * 60 * 1000
+}
+
+// ─── Savings Goal Mutations ────────────────────────────────────────────────
+export function addSavingsGoal(goal) {
+  state.savingsGoals.push(goal)
+  return goal
+}
+
+export function updateSavingsGoal(goalId, updates) {
+  const goal = state.savingsGoals.find(g => g.id === goalId)
+  if (!goal) return null
+  Object.assign(goal, updates)
+  return goal
+}
+
+// ─── Per-user Clock Entries ────────────────────────────────────────────────
+export function getClockEntriesForUser(userId) {
+  return state.clockEntries.filter(e => e.employeeId === String(userId))
 }

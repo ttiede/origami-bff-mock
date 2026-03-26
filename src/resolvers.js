@@ -52,6 +52,18 @@ import {
   // Rate limiting & daily totals
   trackFailedAttempt, isRateLimited, clearFailedAttempts,
   getDailyTotal, addToDailyTotal, getDailyLimit,
+  // PIX keys
+  getPixKeys, addPixKey,
+  // Chat
+  getChatMessages, addChatMessage,
+  // Terms
+  acceptTerms as storeTermsAcceptance, getTermsAcceptance,
+  // PIN validation session
+  setPinValidated, isPinRecentlyValidated,
+  // Savings goals mutations
+  addSavingsGoal, updateSavingsGoal,
+  // Per-user clock entries
+  getClockEntriesForUser,
 } from './state.js'
 
 // ── GraphQL Error helper ─────────────────────────────────────────────────────
@@ -166,6 +178,88 @@ function validatePin(pin) {
   }
 }
 
+// ── CPF check digit validation (#025) ────────────────────────────────────────
+function isValidCpf(cpf) {
+  const clean = cpf.replace(/\D/g, '')
+  if (clean.length !== 11) return false
+  // Reject all-same-digit CPFs (11111111111, 00000000000, etc.)
+  if (/^(\d)\1{10}$/.test(clean)) return false
+  // Validate check digits
+  let sum = 0
+  for (let i = 0; i < 9; i++) sum += parseInt(clean[i]) * (10 - i)
+  let remainder = (sum * 10) % 11
+  if (remainder === 10) remainder = 0
+  if (remainder !== parseInt(clean[9])) return false
+  sum = 0
+  for (let i = 0; i < 10; i++) sum += parseInt(clean[i]) * (11 - i)
+  remainder = (sum * 10) % 11
+  if (remainder === 10) remainder = 0
+  if (remainder !== parseInt(clean[10])) return false
+  return true
+}
+
+// ── PIX key format validation (#030) ─────────────────────────────────────────
+function validatePixKeyFormat(chavePix, tipoChave) {
+  const tipo = (tipoChave || '').toLowerCase()
+  if (tipo === 'cpf') {
+    const clean = chavePix.replace(/\D/g, '')
+    if (clean.length !== 11) return 'CPF deve ter 11 dígitos.'
+    if (!isValidCpf(clean)) return 'CPF inválido (dígitos verificadores incorretos).'
+    return null
+  }
+  if (tipo === 'cnpj') {
+    const clean = chavePix.replace(/\D/g, '')
+    if (clean.length !== 14) return 'CNPJ deve ter 14 dígitos.'
+    return null
+  }
+  if (tipo === 'email') {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(chavePix)) return 'E-mail inválido.'
+    return null
+  }
+  if (tipo === 'phone' || tipo === 'telefone' || tipo === 'celular') {
+    const clean = chavePix.replace(/\D/g, '')
+    if (clean.length < 10 || clean.length > 13) return 'Telefone deve ter entre 10 e 13 dígitos.'
+    return null
+  }
+  if (tipo === 'random' || tipo === 'aleatoria' || tipo === 'evp') {
+    // UUID format check
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(chavePix)) {
+      return 'Chave aleatória deve estar no formato UUID.'
+    }
+    return null
+  }
+  return null // Unknown type — accept
+}
+
+// ── PIX key → recipient lookup (#031) ────────────────────────────────────────
+const PIX_RECIPIENTS = {
+  '11999887766': { nomeTitular: 'Ana Paula Mendes', banco: 'Nubank', tipoConta: 'corrente' },
+  '21988776655': { nomeTitular: 'Ricardo Ferreira Lima', banco: 'Bradesco', tipoConta: 'corrente' },
+  'lucas@email.com': { nomeTitular: 'Lucas Almeida Costa', banco: 'Itaú Unibanco', tipoConta: 'poupanca' },
+  'maria@empresa.com.br': { nomeTitular: 'Maria Fernanda Rocha', banco: 'Banco do Brasil', tipoConta: 'corrente' },
+  '12345678901': { nomeTitular: 'Pedro Henrique Santos', banco: 'Santander', tipoConta: 'corrente' },
+  '45678901234567': { nomeTitular: 'Empresa ABC Ltda', banco: 'Caixa Econômica', tipoConta: 'corrente' },
+}
+
+// ── Generate e2eid for PIX transactions (#080) ──────────────────────────────
+function generateE2eid() {
+  const ispb = '12345678'
+  const date = new Date()
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  const h = String(date.getHours()).padStart(2, '0')
+  const rand = Math.random().toString(36).substring(2, 13).toUpperCase()
+  return `E${ispb}${y}${m}${d}${h}${rand}`
+}
+
+// ── Nocturnal PIX limit check (#084) ─────────────────────────────────────────
+const NOCTURNAL_PIX_LIMIT = 1000.00
+function isNocturnalHour() {
+  const hour = new Date().getHours()
+  return hour >= 20 || hour < 6
+}
+
 export const resolvers = {
   // ══════════════════════════════════════════════════════════════════
   //  QUERIES — all read from state
@@ -224,13 +318,21 @@ export const resolvers = {
       }))
     },
 
-    validatePixKey: (_, { chavePix, tipoChave }) => ({
-      valid: true,
-      nomeTitular: 'Lucas Oliveira Silva',
-      banco: 'Origami Bank',
-      tipoConta: 'corrente',
-      errorMessage: null,
-    }),
+    validatePixKey: (_, { chavePix, tipoChave }) => {
+      // #030: Real format validation
+      const formatError = validatePixKeyFormat(chavePix, tipoChave)
+      if (formatError) {
+        return { valid: false, nomeTitular: '', banco: '', tipoConta: '', errorMessage: formatError }
+      }
+      // #031: Return different recipients based on key
+      const cleanKey = chavePix.replace(/\D/g, '')
+      const recipient = PIX_RECIPIENTS[chavePix] || PIX_RECIPIENTS[cleanKey]
+      if (recipient) {
+        return { valid: true, nomeTitular: recipient.nomeTitular, banco: recipient.banco, tipoConta: recipient.tipoConta, errorMessage: null }
+      }
+      // Default fallback
+      return { valid: true, nomeTitular: 'Lucas Oliveira Silva', banco: 'Origami Bank', tipoConta: 'corrente', errorMessage: null }
+    },
 
     nextDeposits: (_, { walletId } = {}, context) => {
       const userId = uid(context)
@@ -293,7 +395,12 @@ export const resolvers = {
       }
     },
 
-    revealCard: (_, { id: cardId }) => {
+    revealCard: (_, { id: cardId }, context) => {
+      // #067: Sensitive data requires validateTransactionPin first
+      const userId = requireAuth(context)
+      if (!isPinRecentlyValidated(userId)) {
+        throw gqlError('Validação de PIN necessária. Execute validateTransactionPin antes de acessar dados sensíveis.', 'PIN_REQUIRED', 403)
+      }
       const data = getSensitiveData()[cardId]
       if (data) return data
       return {
@@ -385,15 +492,33 @@ export const resolvers = {
     geofenceZones: () => getGeofenceZones(),
 
     // ── HR ──────────────────────────────────────────────────────
-    timeSheet: (_, { date }) => {
-      const entries = getClockEntries().filter(e => e.timestamp.startsWith(date))
+    // #093: Per-user clock entries (not just user 1)
+    timeSheet: (_, { date }, context) => {
+      const userId = uid(context)
+      const allEntries = getClockEntries()
+      const entries = allEntries.filter(e => e.timestamp.startsWith(date) && e.employeeId === String(userId))
+      // Calculate worked minutes from entries
+      let workedMinutes = 480
+      let breakMinutes = 64
+      if (entries.length >= 2) {
+        const sorted = [...entries].sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+        const first = new Date(sorted[0].timestamp)
+        const last = new Date(sorted[sorted.length - 1].timestamp)
+        const totalMs = last - first
+        workedMinutes = Math.round(totalMs / 60000)
+        breakMinutes = Math.max(0, workedMinutes - 480)
+        if (workedMinutes > 480) { workedMinutes = 480 }
+      } else if (entries.length === 0) {
+        workedMinutes = 0
+        breakMinutes = 0
+      }
       return {
         date,
         entries,
-        workedMinutes: 480,
-        extraMinutes: 30,
+        workedMinutes,
+        extraMinutes: Math.max(0, workedMinutes - 480),
         nightMinutes: 0,
-        breakMinutes: 64,
+        breakMinutes,
       }
     },
 
@@ -403,7 +528,26 @@ export const resolvers = {
 
     vacationHistory: () => getVacationHistory(),
 
-    payslips: (_, { year }) => getPayslips().filter(p => p.year === year),
+    // #104: Payslip varying by user salary
+    payslips: (_, { year }, context) => {
+      const userId = uid(context)
+      const basePayslips = getPayslips().filter(p => p.year === year)
+      // User 1 gets the default payslips
+      if (userId === '1' || !userId) return basePayslips
+      // For other users, generate salary-adjusted payslips
+      const salaryMap = { '2': 15000, '3': 8500, '5': 10000, '7': 2500, '8': 35000, '9': 18000, '11': 6500 }
+      const userGross = salaryMap[userId]
+      if (!userGross) return basePayslips
+      const ratio = userGross / 12500 // base salary is 12500
+      return basePayslips.map(p => ({
+        ...p,
+        id: `${p.id}-u${userId}`,
+        grossSalary: parseFloat((p.grossSalary * ratio).toFixed(2)),
+        netSalary: parseFloat((p.netSalary * ratio).toFixed(2)),
+        deductions: p.deductions.map(d => ({ ...d, amount: parseFloat((d.amount * ratio).toFixed(2)) })),
+        benefits: p.benefits.map(b => ({ ...b, amount: parseFloat((b.amount * ratio).toFixed(2)) })),
+      }))
+    },
 
     hrEvents: (_, { month, year }) => {
       return getHrEvents().filter(e => {
@@ -507,6 +651,159 @@ export const resolvers = {
       current: 320.0,
       category: 'alimentacao',
     }),
+
+    // ── Validate Boleto (#035) ───────────────────────────────────────
+    validateBoleto: (_, { barcode }) => {
+      if (!barcode || barcode.length < 44) {
+        return { valid: false, barcode, amount: null, dueDate: null, beneficiary: null, bank: null, errorMessage: 'Código de barras deve ter no mínimo 44 dígitos.' }
+      }
+      // Parse bank from first 3 digits
+      const bankCodes = { '001': 'Banco do Brasil', '033': 'Santander', '104': 'Caixa Econômica', '237': 'Bradesco', '341': 'Itaú Unibanco' }
+      const bankCode = barcode.substring(0, 3)
+      const bank = bankCodes[bankCode] || 'Banco desconhecido'
+      // Mock: extract value from positions
+      const valueStr = barcode.substring(9, 19) || '0000015000'
+      const amount = parseFloat(valueStr) / 100
+      const dueDate = new Date(Date.now() + 7 * 86400000).toISOString().substring(0, 10)
+      return { valid: true, barcode, amount: amount || 150.00, dueDate, beneficiary: 'Companhia de Energia Elétrica de SP', bank, errorMessage: null }
+    },
+
+    // ── Spend Insights (#039) ────────────────────────────────────────
+    spendInsights: (_, { months } = {}, context) => {
+      const userId = uid(context)
+      const txs = getTransactions(userId)
+      const now = new Date()
+      const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+      const monthTxs = txs.filter(t => t.data >= monthStart && t.valor < 0 && t.status === 'aprovada')
+      const categoryMap = {}
+      let totalSpent = 0
+      const merchantCount = {}
+      monthTxs.forEach(t => {
+        const cat = t.categoria || 'Outros'
+        const val = Math.abs(t.valor)
+        totalSpent += val
+        if (!categoryMap[cat]) categoryMap[cat] = { total: 0, count: 0 }
+        categoryMap[cat].total += val
+        categoryMap[cat].count++
+        const merch = t.merchant || t.estabelecimento || 'Desconhecido'
+        merchantCount[merch] = (merchantCount[merch] || 0) + val
+      })
+      const categories = Object.entries(categoryMap).map(([cat, data]) => ({
+        category: cat,
+        total: parseFloat(data.total.toFixed(2)),
+        count: data.count,
+        percentOfTotal: totalSpent > 0 ? parseFloat((data.total / totalSpent * 100).toFixed(1)) : 0,
+      })).sort((a, b) => b.total - a.total)
+      const topMerchant = Object.entries(merchantCount).sort((a, b) => b[1] - a[1])[0]?.[0] || null
+      return {
+        month: monthStr,
+        totalSpent: parseFloat(totalSpent.toFixed(2)),
+        categories,
+        topMerchant,
+        averageTransaction: monthTxs.length > 0 ? parseFloat((totalSpent / monthTxs.length).toFixed(2)) : 0,
+        comparedToPreviousMonth: -8.5,
+      }
+    },
+
+    // ── Statement Home — last 5 transactions (#044) ─────────────────
+    statementHome: (_, { limit: lim } = {}, context) => {
+      const userId = uid(context)
+      const txs = getTransactions(userId)
+      return txs.slice(0, lim || 5)
+    },
+
+    // ── My PIX Keys (#077) ───────────────────────────────────────────
+    myPixKeys: (_, __, context) => {
+      const userId = requireAuth(context)
+      return getPixKeys(userId)
+    },
+
+    // ── Inbox / Messaging (#161) ─────────────────────────────────────
+    inbox: (_, __, context) => {
+      requireAuth(context)
+      return [
+        { id: 'msg-001', from: 'RH — Indústria ABC', subject: 'Atualização política de benefícios', body: 'Prezado colaborador, informamos que a política de benefícios foi atualizada. Confira os detalhes no portal RH.', date: new Date(Date.now() - 2 * 86400000).toISOString(), read: false, category: 'rh' },
+        { id: 'msg-002', from: 'Financeiro', subject: 'Nota fiscal disponível', body: 'Sua nota fiscal referente ao mês de fevereiro já está disponível para download na aba Documentos.', date: new Date(Date.now() - 5 * 86400000).toISOString(), read: true, category: 'financeiro' },
+        { id: 'msg-003', from: 'Origami', subject: 'Novidade: PIX instantâneo', body: 'Agora você pode fazer transferências PIX instantâneas diretamente pelo app Origami. Experimente!', date: new Date(Date.now() - 7 * 86400000).toISOString(), read: true, category: 'produto' },
+        { id: 'msg-004', from: 'Suporte', subject: 'Sua solicitação foi atendida', body: 'O ticket #12345 referente ao estorno de cobrança duplicada foi resolvido. Valor creditado na sua carteira.', date: new Date(Date.now() - 10 * 86400000).toISOString(), read: true, category: 'suporte' },
+        { id: 'msg-005', from: 'RH — Indústria ABC', subject: 'Recadastramento anual', body: 'Lembrete: o recadastramento anual deve ser feito até 30/04/2026. Acesse o portal para atualizar seus dados.', date: new Date(Date.now() - 1 * 86400000).toISOString(), read: false, category: 'rh' },
+      ]
+    },
+
+    // ── Surveys (#162) ───────────────────────────────────────────────
+    surveys: (_, __, context) => {
+      requireAuth(context)
+      return [
+        {
+          id: 'survey-001', title: 'Pesquisa de Satisfação — App Origami', description: 'Ajude-nos a melhorar sua experiência com o app.',
+          questions: [
+            { id: 'sq-001', text: 'De 0 a 10, quanto você recomendaria o app Origami?', type: 'nps', options: null },
+            { id: 'sq-002', text: 'Qual funcionalidade você mais utiliza?', type: 'single_choice', options: ['Carteiras','Cartões','PIX','Extrato','Parceiros'] },
+            { id: 'sq-003', text: 'O que podemos melhorar?', type: 'text', options: null },
+          ],
+          expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(), completed: false,
+        },
+        {
+          id: 'survey-002', title: 'Clima Organizacional Q1 2026', description: 'Pesquisa trimestral de clima do seu departamento.',
+          questions: [
+            { id: 'sq-004', text: 'Como você avalia seu ambiente de trabalho?', type: 'single_choice', options: ['Excelente','Bom','Regular','Ruim'] },
+            { id: 'sq-005', text: 'Você se sente valorizado(a) pela empresa?', type: 'single_choice', options: ['Sim','Parcialmente','Não'] },
+          ],
+          expiresAt: new Date(Date.now() + 14 * 86400000).toISOString(), completed: false,
+        },
+      ]
+    },
+
+    // ── Chat History (#171) ──────────────────────────────────────────
+    chatHistory: (_, __, context) => {
+      const userId = requireAuth(context)
+      const messages = getChatMessages(userId)
+      if (messages.length > 0) return messages
+      // Default seed messages
+      return [
+        { id: 'chat-seed-1', sender: 'system', message: 'Olá! Como posso ajudar você hoje?', timestamp: new Date(Date.now() - 3600000).toISOString(), category: 'geral' },
+      ]
+    },
+
+    // ── Documents List (#173) ────────────────────────────────────────
+    documents: (_, __, context) => {
+      requireAuth(context)
+      return [
+        { id: 'doc-001', title: 'Holerite Março 2026', type: 'payslip', url: 'https://mock.origami.com.br/documents/holerite-202603.pdf', issuedAt: new Date(Date.now() - 5 * 86400000).toISOString(), expiresAt: null },
+        { id: 'doc-002', title: 'Informe de Rendimentos 2025', type: 'income_report', url: 'https://mock.origami.com.br/documents/informe-rendimentos-2025.pdf', issuedAt: '2026-02-28T00:00:00Z', expiresAt: null },
+        { id: 'doc-003', title: 'Comprovante de Benefícios', type: 'benefit_statement', url: 'https://mock.origami.com.br/documents/comprovante-beneficios.pdf', issuedAt: new Date(Date.now() - 30 * 86400000).toISOString(), expiresAt: null },
+        { id: 'doc-004', title: 'Contrato de Trabalho', type: 'contract', url: 'https://mock.origami.com.br/documents/contrato-trabalho.pdf', issuedAt: '2024-04-01T00:00:00Z', expiresAt: null },
+        { id: 'doc-005', title: 'Acordo de Confidencialidade', type: 'nda', url: 'https://mock.origami.com.br/documents/nda.pdf', issuedAt: '2024-04-01T00:00:00Z', expiresAt: '2027-04-01T00:00:00Z' },
+        { id: 'doc-006', title: 'PPRA/PCMSO', type: 'safety', url: 'https://mock.origami.com.br/documents/ppra-pcmso-2026.pdf', issuedAt: '2026-01-15T00:00:00Z', expiresAt: '2027-01-15T00:00:00Z' },
+      ]
+    },
+
+    // ── Copilot AI Advice (#200) ─────────────────────────────────────
+    copilotAdvice: (_, __, context) => {
+      const userId = uid(context)
+      const txs = getTransactions(userId)
+      const recentDebits = txs.filter(t => t.valor < 0 && t.status === 'aprovada').slice(0, 30)
+      const totalRecent = recentDebits.reduce((s, t) => s + Math.abs(t.valor), 0)
+      const catTotals = {}
+      recentDebits.forEach(t => {
+        const cat = t.categoria || 'Outros'
+        catTotals[cat] = (catTotals[cat] || 0) + Math.abs(t.valor)
+      })
+      const topCat = Object.entries(catTotals).sort((a, b) => b[1] - a[1])[0]
+      return {
+        summary: `Nos últimos 30 dias, você gastou R$ ${totalRecent.toFixed(2)} em ${recentDebits.length} transações. Seu maior gasto foi em ${topCat?.[0] || 'Alimentação'} (R$ ${(topCat?.[1] || 0).toFixed(2)}).`,
+        tips: [
+          'Considere usar a carteira de Refeição para almoços — ela tem saldo dedicado e não compromete o Flexível.',
+          'Você pode economizar até R$ 50/mês usando vouchers de parceiros para farmácias e combustível.',
+          'Configure alertas de saldo baixo para evitar surpresas no fim do mês.',
+          'Avalie concentrar compras de supermercado em 1-2 dias por semana para controlar melhor os gastos.',
+        ],
+        savingsOpportunity: 187.50,
+        topCategory: topCat?.[0] || 'Alimentação',
+        monthlyBudgetStatus: totalRecent > 2000 ? 'acima_do_planejado' : 'dentro_do_planejado',
+      }
+    },
   },
 
   // ══════════════════════════════════════════════════════════════════
@@ -517,6 +814,13 @@ export const resolvers = {
     // ── Auth ──────────────────────────────────────────────────────
     login: (_, { input }) => {
       const { cpf, password } = input
+
+      // #025: CPF check digit validation
+      const cleanCpf = cpf.replace(/\D/g, '')
+      if (!isValidCpf(cleanCpf)) {
+        logMutation('login', `FAILED: invalid CPF format ${cpf}`)
+        throw gqlError('CPF inválido. Verifique os dígitos informados.', 'BAD_REQUEST', 400)
+      }
 
       // Rate limit check
       const rateLimitKey = `login:${cpf}`
@@ -534,6 +838,23 @@ export const resolvers = {
         trackFailedAttempt(rateLimitKey)
         throw gqlError('CPF não encontrado.', 'NOT_FOUND', 404)
       }
+
+      // #008: Check bloqueioAte for user 9 (Patricia) and others with temporary block
+      if (user.bloqueioAte) {
+        const blockUntil = new Date(user.bloqueioAte)
+        if (blockUntil > new Date()) {
+          const minutesLeft = Math.ceil((blockUntil - new Date()) / 60000)
+          logMutation('login', `FAILED: user:${user.id} temporarily blocked until ${user.bloqueioAte}`)
+          throw gqlError(
+            `Conta temporariamente bloqueada. Tente novamente em ${minutesLeft} minutos.`,
+            'ACCOUNT_LOCKED', 423
+          )
+        }
+        // Block expired, clear it
+        user.bloqueioAte = null
+        user.tentativasFalhas = 0
+      }
+
       if (user.bloqueioDefinitivo) {
         logMutation('login', `FAILED: user:${user.id} blocked permanently`)
         throw gqlError(
@@ -577,6 +898,43 @@ export const resolvers = {
           email: user.email, roles: ['employee'],
         },
       }
+    },
+
+    // #003: Refresh Token mutation
+    refreshToken: (_, { refreshToken: token }) => {
+      if (!token || !token.startsWith('origami-refresh-')) {
+        throw gqlError('Refresh token inválido.', 'UNAUTHORIZED', 401)
+      }
+      const userId = token.replace('origami-refresh-', '')
+      const user = findUserById(userId)
+      if (!user) {
+        throw gqlError('Refresh token inválido — usuário não encontrado.', 'UNAUTHORIZED', 401)
+      }
+      if (user.bloqueioDefinitivo) {
+        throw gqlError('Conta bloqueada definitivamente.', 'FORBIDDEN', 403)
+      }
+      logMutation('refreshToken', `user:${userId} | new tokens issued`)
+      return {
+        accessToken: makeToken(user.id),
+        refreshToken: `origami-refresh-${user.id}`,
+        expiresIn: 3600,
+        user: {
+          id: String(user.id), fullName: user.nome,
+          maskedCpf: `***.${user.cpf.slice(3, 9)}-**`,
+          email: user.email, roles: ['employee'],
+        },
+      }
+    },
+
+    // #014: Accept Terms mutation
+    acceptTerms: (_, { input }, context) => {
+      const userId = requireAuth(context)
+      if (!input.version) {
+        throw gqlError('Versão dos termos é obrigatória.', 'BAD_REQUEST', 400)
+      }
+      storeTermsAcceptance(userId, input.version)
+      logMutation('acceptTerms', `user:${userId} | version:${input.version}`)
+      return ok()
     },
 
     logout: (_, { sessionId } = {}, context) => {
@@ -695,6 +1053,8 @@ export const resolvers = {
         throw gqlError('PIN de transação incorreto.', 'UNAUTHORIZED', 401)
       }
       clearFailedAttempts(rateLimitKey)
+      // #067: Mark PIN as recently validated for sensitive data access
+      setPinValidated(userId)
       return ok()
     },
 
@@ -739,6 +1099,34 @@ export const resolvers = {
       return ok()
     },
 
+    // ── PIX Key Registration (#076) ────────────────────────────────
+    registerPixKey: (_, { input }, context) => {
+      const userId = requireAuth(context)
+      if (!input.type || !input.key) {
+        throw gqlError('Tipo e chave são obrigatórios.', 'BAD_REQUEST', 400)
+      }
+      const fmtErr = validatePixKeyFormat(input.key, input.type)
+      if (fmtErr) throw gqlError(fmtErr, 'BAD_REQUEST', 400)
+      // Check for duplicates
+      const existing = getPixKeys(userId)
+      if (existing.find(k => k.key === input.key)) {
+        throw gqlError('Esta chave PIX já está registrada.', 'CONFLICT', 409)
+      }
+      if (existing.length >= 5) {
+        throw gqlError('Limite máximo de 5 chaves PIX atingido.', 'LIMIT_EXCEEDED', 422)
+      }
+      const key = {
+        id: nextId('pix-key'),
+        type: input.type,
+        key: input.key,
+        createdAt: new Date().toISOString(),
+        status: 'active',
+      }
+      addPixKey(userId, key)
+      logMutation('registerPixKey', `user:${userId} | type:${input.type} key:${input.key}`)
+      return key
+    },
+
     // ── Wallet ────────────────────────────────────────────────────
     pixTransfer: (_, { input }, context) => {
       const userId = requireAuth(context)
@@ -749,12 +1137,26 @@ export const resolvers = {
       if (!input.chavePix) {
         throw gqlError('Chave PIX é obrigatória.', 'BAD_REQUEST', 400)
       }
+      // #030: PIX key format validation
+      if (input.tipoChave) {
+        const fmtErr = validatePixKeyFormat(input.chavePix, input.tipoChave)
+        if (fmtErr) throw gqlError(fmtErr, 'BAD_REQUEST', 400)
+      }
+      // #084: Nocturnal PIX limit
+      if (isNocturnalHour() && input.amount > NOCTURNAL_PIX_LIMIT) {
+        throw gqlError(
+          `Limite noturno PIX excedido. Entre 20h e 06h, o limite é R$ ${NOCTURNAL_PIX_LIMIT.toFixed(2)}.`,
+          'NOCTURNAL_LIMIT_EXCEEDED', 422
+        )
+      }
       validateWalletTransaction(userId, input.walletId, input.amount, 'PIX')
       const wallet = deductWallet(userId, input.walletId, input.amount)
       addToDailyTotal(userId, input.amount)
       const tx = makeTx('pix', `PIX para ${input.chavePix}`, input.amount, input.walletId, 'PIX')
+      // #080: Add e2eid to PIX transactions
+      tx.e2eid = generateE2eid()
       addTransaction(userId, tx)
-      logMutation('pixTransfer', `user:${userId} | wallet:${input.walletId} -R$${input.amount} → R$${wallet?.saldo ?? '?'}`)
+      logMutation('pixTransfer', `user:${userId} | wallet:${input.walletId} -R$${input.amount} → R$${wallet?.saldo ?? '?'} | e2eid:${tx.e2eid}`)
       return fullTx(tx)
     },
 
@@ -933,8 +1335,10 @@ export const resolvers = {
       const wallet = deductWallet(userId, input.walletId, totalDebited)
       addToDailyTotal(userId, totalDebited)
       const tx = makeTx('cashout', `PIX Cash Out para ${input.chavePix}`, input.amount, input.walletId, 'PIX Cash Out')
+      // #080: Add e2eid to PIX Cash Out transactions
+      tx.e2eid = generateE2eid()
       addTransaction(userId, tx)
-      logMutation('executePixCashOut', `user:${userId} | wallet:${input.walletId} -R$${totalDebited} (fee incl.) → R$${wallet?.saldo ?? '?'}`)
+      logMutation('executePixCashOut', `user:${userId} | wallet:${input.walletId} -R$${totalDebited} (fee incl.) → R$${wallet?.saldo ?? '?'} | e2eid:${tx.e2eid}`)
       return fullTx(tx)
     },
 
@@ -950,6 +1354,10 @@ export const resolvers = {
     blockCard: (_, { id: cardId }, context) => {
       const userId = requireAuth(context)
       const card = requireCard(userId, cardId)
+      // #063: Block operations on cancelled cards
+      if (card.status === 'cancelado') {
+        throw gqlError('Operação não permitida em cartão cancelado.', 'FORBIDDEN', 403)
+      }
       if (card.status === 'bloqueado') {
         throw gqlError('Cartão já está bloqueado.', 'CONFLICT', 409)
       }
@@ -962,6 +1370,10 @@ export const resolvers = {
     unblockCard: (_, { id: cardId }, context) => {
       const userId = requireAuth(context)
       const card = requireCard(userId, cardId)
+      // #063: Block operations on cancelled cards
+      if (card.status === 'cancelado') {
+        throw gqlError('Operação não permitida em cartão cancelado.', 'FORBIDDEN', 403)
+      }
       if (card.status === 'ativo') {
         throw gqlError('Cartão já está ativo.', 'CONFLICT', 409)
       }
@@ -998,6 +1410,17 @@ export const resolvers = {
       const card = requireCard(userId, cardId)
       if (card.status === 'ativo') {
         throw gqlError('Cartão já está ativo.', 'CONFLICT', 409)
+      }
+      // #063: Block operations on cancelled cards
+      if (card.status === 'cancelado') {
+        throw gqlError('Cartão cancelado não pode ser ativado. Solicite um novo cartão.', 'FORBIDDEN', 403)
+      }
+      // #056: Card activation requires PIN setup
+      if (!card.pin || card.pin === '0000') {
+        throw gqlError(
+          'Ativação requer configuração de PIN. Defina um PIN seguro antes de ativar o cartão (use changeCardPin).',
+          'PIN_REQUIRED', 422
+        )
       }
       setCardStatus(userId, cardId, 'ativo')
       logMutation('activateCard', `user:${userId} | card:${cardId} → ativo`)
@@ -1248,6 +1671,41 @@ export const resolvers = {
       }
       logMutation('rejectAction', `appr:${id} → reprovado reason:${reason}`)
       return item
+    },
+
+    // ── Support Chat (#171) ────────────────────────────────────────
+    sendChatMessage: (_, { input }, context) => {
+      const userId = requireAuth(context)
+      if (!input.message || input.message.trim().length === 0) {
+        throw gqlError('Mensagem não pode estar vazia.', 'BAD_REQUEST', 400)
+      }
+      // Save user message
+      const userMsg = {
+        id: nextId('chat'),
+        sender: 'user',
+        message: input.message,
+        timestamp: new Date().toISOString(),
+        category: input.category || 'geral',
+      }
+      addChatMessage(userId, userMsg)
+      // Generate bot reply
+      const botReplies = [
+        'Entendi sua dúvida! Vou verificar e retorno em instantes.',
+        'Obrigado pela mensagem. Um de nossos atendentes vai analisar seu caso.',
+        'Compreendo. Posso ajudar com mais alguma coisa?',
+        'Sua solicitação foi registrada com o protocolo #' + Date.now().toString().slice(-6) + '.',
+        'Estamos verificando sua solicitação. O prazo de resposta é de até 2 horas úteis.',
+      ]
+      const botMsg = {
+        id: nextId('chat'),
+        sender: 'bot',
+        message: botReplies[Math.floor(Math.random() * botReplies.length)],
+        timestamp: new Date(Date.now() + 1000).toISOString(),
+        category: input.category || 'geral',
+      }
+      addChatMessage(userId, botMsg)
+      logMutation('sendChatMessage', `user:${userId} | msg:${input.message.slice(0, 50)}...`)
+      return userMsg
     },
 
     // ── Feedback ──────────────────────────────────────────────────
@@ -1615,6 +2073,54 @@ export const resolvers = {
       }
       logMutation('executeCreditOperation', `consent:${consentId} → executed`)
       return true
+    },
+
+    // ── Savings Goals (#199) ────────────────────────────────────
+    createSavingsGoal: (_, { input }, context) => {
+      const userId = requireAuth(context)
+      if (!input.name) throw gqlError('Nome da meta é obrigatório.', 'BAD_REQUEST', 400)
+      if (!input.targetAmount || input.targetAmount <= 0) throw gqlError('Valor alvo deve ser maior que zero.', 'BAD_REQUEST', 400)
+      const goal = {
+        id: nextId('sg'),
+        name: input.name,
+        targetAmount: input.targetAmount,
+        currentAmount: 0,
+        deadline: input.deadline || null,
+        walletId: input.walletId || null,
+        createdAt: new Date().toISOString(),
+      }
+      addSavingsGoal(goal)
+      logMutation('createSavingsGoal', `user:${userId} | ${goal.name} target:R$${goal.targetAmount}`)
+      return goal
+    },
+
+    depositSavingsGoal: (_, { input }, context) => {
+      const userId = requireAuth(context)
+      if (!input.goalId) throw gqlError('goalId é obrigatório.', 'BAD_REQUEST', 400)
+      if (!input.amount || input.amount <= 0) throw gqlError('Valor deve ser maior que zero.', 'BAD_REQUEST', 400)
+      const goals = getSavingsGoals()
+      const goal = goals.find(g => g.id === input.goalId)
+      if (!goal) throw gqlError(`Meta '${input.goalId}' não encontrada.`, 'NOT_FOUND', 404)
+      const newAmount = parseFloat((goal.currentAmount + input.amount).toFixed(2))
+      const updated = updateSavingsGoal(input.goalId, { currentAmount: Math.min(newAmount, goal.targetAmount) })
+      logMutation('depositSavingsGoal', `user:${userId} | goal:${input.goalId} +R$${input.amount} → R$${updated.currentAmount}`)
+      return updated
+    },
+
+    withdrawSavingsGoal: (_, { input }, context) => {
+      const userId = requireAuth(context)
+      if (!input.goalId) throw gqlError('goalId é obrigatório.', 'BAD_REQUEST', 400)
+      if (!input.amount || input.amount <= 0) throw gqlError('Valor deve ser maior que zero.', 'BAD_REQUEST', 400)
+      const goals = getSavingsGoals()
+      const goal = goals.find(g => g.id === input.goalId)
+      if (!goal) throw gqlError(`Meta '${input.goalId}' não encontrada.`, 'NOT_FOUND', 404)
+      if (input.amount > goal.currentAmount) {
+        throw gqlError(`Saldo insuficiente na meta. Disponível: R$${goal.currentAmount.toFixed(2)}.`, 'INSUFFICIENT_BALANCE', 422)
+      }
+      const newAmount = parseFloat((goal.currentAmount - input.amount).toFixed(2))
+      const updated = updateSavingsGoal(input.goalId, { currentAmount: newAmount })
+      logMutation('withdrawSavingsGoal', `user:${userId} | goal:${input.goalId} -R$${input.amount} → R$${updated.currentAmount}`)
+      return updated
     },
 
     // ── Travel ─────────────────────────────────────────────────
