@@ -817,6 +817,23 @@ export const resolvers = {
 
     travelPolicy: () => getTravelPolicy(),
 
+    // ── Flight Tickets ──────────────────────────────────────────
+    flightTickets: () => [
+      { id: 'FT001', airline: 'LATAM', flightNumber: 'LA3456', departure: 'GRU', arrival: 'GIG', departureTime: '2026-04-10T08:30:00', arrivalTime: '2026-04-10T09:45:00', seatClass: 'Econômica', price: 489.90, bookingRef: 'LATBR7X' },
+      { id: 'FT002', airline: 'GOL', flightNumber: 'G31287', departure: 'GRU', arrival: 'CNF', departureTime: '2026-04-12T14:00:00', arrivalTime: '2026-04-12T15:20:00', seatClass: 'Econômica', price: 352.00, bookingRef: 'GOLMK9P' },
+      { id: 'FT003', airline: 'Azul', flightNumber: 'AD4521', departure: 'VCP', arrival: 'SSA', departureTime: '2026-04-15T06:15:00', arrivalTime: '2026-04-15T08:45:00', seatClass: 'Executiva', price: 1280.00, bookingRef: 'AZLQW3R' },
+      { id: 'FT004', airline: 'LATAM', flightNumber: 'LA8802', departure: 'GIG', arrival: 'GRU', departureTime: '2026-04-10T18:00:00', arrivalTime: '2026-04-10T19:10:00', seatClass: 'Econômica', price: 412.50, bookingRef: 'LATBR7X' },
+    ],
+    flightTicket: (_, { id }) => {
+      const tickets = {
+        FT001: { id: 'FT001', airline: 'LATAM', flightNumber: 'LA3456', departure: 'GRU', arrival: 'GIG', departureTime: '2026-04-10T08:30:00', arrivalTime: '2026-04-10T09:45:00', seatClass: 'Econômica', price: 489.90, bookingRef: 'LATBR7X' },
+        FT002: { id: 'FT002', airline: 'GOL', flightNumber: 'G31287', departure: 'GRU', arrival: 'CNF', departureTime: '2026-04-12T14:00:00', arrivalTime: '2026-04-12T15:20:00', seatClass: 'Econômica', price: 352.00, bookingRef: 'GOLMK9P' },
+        FT003: { id: 'FT003', airline: 'Azul', flightNumber: 'AD4521', departure: 'VCP', arrival: 'SSA', departureTime: '2026-04-15T06:15:00', arrivalTime: '2026-04-15T08:45:00', seatClass: 'Executiva', price: 1280.00, bookingRef: 'AZLQW3R' },
+        FT004: { id: 'FT004', airline: 'LATAM', flightNumber: 'LA8802', departure: 'GIG', arrival: 'GRU', departureTime: '2026-04-10T18:00:00', arrivalTime: '2026-04-10T19:10:00', seatClass: 'Econômica', price: 412.50, bookingRef: 'LATBR7X' },
+      }
+      return tickets[id] || null
+    },
+
     // ── Missing Query resolvers ────────────────────────────────
     me: (_, __, context) => {
       const auth = context.request?.headers?.get('authorization') ?? '';
@@ -1921,6 +1938,26 @@ export const resolvers = {
       logMutation('toggleContactless', `user:${userId} | card:${cardId} → contactless:${enabled}`)
       const { pin, ...safe } = updated
       return { ...safe, internationalMode: card.internationalMode ?? false, lockReason: getCardLockReason(cardId) || null, spendingLimits: { cardId, ...getCardSpendingLimits(cardId) } }
+    },
+
+    // Alias: Flutter uses toggleContactlessMode, schema has both
+    toggleContactlessMode: (_, args, context) => resolvers.Mutation.toggleContactless(_, args, context),
+
+    // simulateCredit mutation (Flutter sends as mutation, BFF had as query)
+    simulateCredit: (_, { input }) => {
+      const { amount, installments, type } = input
+      const rate = type === 'consignado' ? 0.018 : 0.025
+      const monthlyPayment = (amount * (1 + rate * installments)) / installments
+      return {
+        id: `SIM-${Date.now()}`,
+        type,
+        amount,
+        installments,
+        monthlyPayment: Math.round(monthlyPayment * 100) / 100,
+        interestRate: rate * 100,
+        totalCost: Math.round(monthlyPayment * installments * 100) / 100,
+        iofTax: Math.round(amount * 0.0038 * 100) / 100,
+      }
     },
 
     // #062: Per-card spending limits mutation

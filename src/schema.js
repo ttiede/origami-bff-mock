@@ -411,6 +411,8 @@ export const typeDefs = /* GraphQL */ `
     travelDetail(id: ID!): TravelRequest
     travelPolicy: TravelPolicy
     perDiem(destination: String!): PerDiem
+    flightTickets: [FlightTicket!]!
+    flightTicket(id: ID!): FlightTicket
 
     # #164: CEP lookup
     queryCep(cep: String!): CepResult
@@ -478,6 +480,7 @@ export const typeDefs = /* GraphQL */ `
     requestCardReplacement(id: ID!, reason: String!): MutationResult!
     toggleInternationalMode(id: ID!, enabled: Boolean!): Boolean!
     toggleContactless(id: ID!, enabled: Boolean!): BenefitCard!
+    toggleContactlessMode(id: ID!, enabled: Boolean!): BenefitCard!
     setCardSpendingLimits(input: CardSpendingLimitInput!): CardSpendingLimits!
     orderCard(input: CardOrderInput!): BenefitCard!
     updateCardLinkedWallets(input: CardLinkedWalletInput!): BenefitCard!
@@ -568,6 +571,7 @@ export const typeDefs = /* GraphQL */ `
     uploadCreditFile(loanId: ID!, fileType: String!, fileName: String!): RequiredFile!
     createCreditConsent(simulationId: ID!): Boolean
     executeCreditOperation(consentId: ID!): Boolean
+    simulateCredit(input: SimulateCreditInput!): CreditSimulation
 
     # Savings Goals
     createSavingsGoal(input: CreateSavingsGoalInput!): SavingsGoal
@@ -1266,6 +1270,12 @@ export const typeDefs = /* GraphQL */ `
   }
 
   # ─── Credit types ─────────────────────────────────────────────────────
+  input SimulateCreditInput {
+    amount: Float!
+    installments: Int!
+    type: String!
+  }
+
   type CreditSimulation {
     id: ID!
     type: String!
@@ -1377,6 +1387,20 @@ export const typeDefs = /* GraphQL */ `
     maxHotelNight: Float!
     requiresPreApproval: Boolean!
     advanceDays: Int!
+  }
+
+  # ─── Flight Tickets ──────────────────────────────────────────────────
+  type FlightTicket {
+    id: ID!
+    airline: String!
+    flightNumber: String!
+    departure: String!
+    arrival: String!
+    departureTime: String!
+    arrivalTime: String!
+    seatClass: String!
+    price: Float!
+    bookingRef: String!
   }
 
   # ─── Banks ───────────────────────────────────────────────────────────
