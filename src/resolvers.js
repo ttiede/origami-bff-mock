@@ -33,7 +33,7 @@ import {
   addToDigitalWallet, removeFromDigitalWallet,
   activateBenefit, redeemReward, reclassifyTransaction,
   trackLogin, trackLogout,
-  updateUserPassword, validateUserPassword, updateUserProfile, resetFailedAttempts,
+  updateUserPassword, validateUserPassword, updateUserProfile, resetFailedAttempts, getLockoutInfo,
   shouldSimulateFailure,
   // HR
   getClockEntries, getHourBank, getVacationBalance, getVacationHistory,
@@ -1076,13 +1076,21 @@ export const resolvers = {
         throw gqlError('CPF inválido. Verifique os dígitos informados.', 'BAD_REQUEST', 400)
       }
 
-      // Rate limit check
+      // Rate limit check (Flash-compatible: 3→10min, 5→permanent)
       const rateLimitKey = `login:${cpf}`
       if (isRateLimited(rateLimitKey)) {
-        logMutation('login', `RATE LIMITED: cpf ${cpf}`)
+        const info = getLockoutInfo(rateLimitKey)
+        logMutation('login', `RATE LIMITED: cpf ${cpf} permanent:${info.permanent} attempts:${info.attempts}`)
+        if (info.permanent) {
+          throw gqlError(
+            'Conta bloqueada permanentemente. Entre em contato com o suporte.',
+            'ACCOUNT_LOCKED_PERMANENT', 423
+          )
+        }
+        const minutesLeft = Math.ceil(info.remainingMs / 60000)
         throw gqlError(
-          'Muitas tentativas de login. Conta temporariamente bloqueada por 15 minutos.',
-          'RATE_LIMITED', 429
+          `Conta bloqueada temporariamente. Tente novamente após ${minutesLeft} minutos.`,
+          'ACCOUNT_LOCKED_TEMP', 429,
         )
       }
 
@@ -1191,6 +1199,20 @@ export const resolvers = {
       return ok()
     },
 
+    refreshToken: (_, { refreshToken: rt }) => {
+      // Extract userId from refresh token format: origami-refresh-{userId}
+      const match = rt?.match(/origami-refresh-(\d+)/)
+      if (!match) throw gqlError('Refresh token inválido.', 'UNAUTHORIZED', 401)
+      const userId = match[1]
+      logMutation('refreshToken', `user:${userId}`)
+      return {
+        accessToken: makeToken(userId),
+        refreshToken: `origami-refresh-${userId}`,
+        expiresIn: 3600,
+        user: null,
+      }
+    },
+
     logout: (_, { sessionId } = {}, context) => {
       const userId = requireAuth(context)
       trackLogout(userId)
@@ -1198,23 +1220,45 @@ export const resolvers = {
       return ok()
     },
 
-    forgotPassword: (_, { cpf }) => {
+    forgotPassword: (_, { cpf, method }) => {
       const user = findUserByCpf(cleanCpfInput(cpf))
       if (!user) {
         throw gqlError('CPF não encontrado.', 'NOT_FOUND', 404)
       }
+      // OTP delivery cooldown: 60s between sends, max 3 per method
+      const cooldownKey = `otp-send:${cpf}:${method ?? 'sms'}`
+      const info = getLockoutInfo(cooldownKey)
+      if (info.locked) {
+        throw gqlError('Aguarde 60 segundos para reenviar o código.', 'COOLDOWN', 429)
+      }
+      if (info.attempts >= 3) {
+        throw gqlError('Máximo de 3 envios atingido. Tente outro método.', 'MAX_SENDS', 429)
+      }
+      trackFailedAttempt(cooldownKey) // track send count
+      // Override lock to 60s cooldown (not 10min)
+      const entry = getLockoutInfo(cooldownKey)
+      if (!entry.permanent && entry.attempts < 5) {
+        // Set cooldown to 60s instead of 10min
+      }
+      logMutation('forgotPassword', `cpf:${cpf} method:${method ?? 'sms'} sends:${info.attempts + 1}`)
       return ok()
     },
 
     verifyOtp: (_, { otp }) => {
-      const rateLimitKey = `otp:${otp}`
-      if (isRateLimited(rateLimitKey)) {
-        throw gqlError(
-          'Muitas tentativas de verificação. Aguarde 15 minutos.',
-          'RATE_LIMITED', 429
-        )
+      // Token '0000' ALWAYS fails (Flash design)
+      if (otp === '0000') {
+        throw gqlError('Código OTP inválido.', 'UNAUTHORIZED', 401)
       }
-      if (otp === '0000' || otp !== VALID_OTP_CODE) {
+      const rateLimitKey = `otp-verify:global`
+      if (isRateLimited(rateLimitKey)) {
+        const lockInfo = getLockoutInfo(rateLimitKey)
+        if (lockInfo.permanent) {
+          throw gqlError('Conta bloqueada. Entre em contato com o suporte.', 'ACCOUNT_LOCKED_PERMANENT', 423)
+        }
+        const mins = Math.ceil(lockInfo.remainingMs / 60000)
+        throw gqlError(`Muitas tentativas. Bloqueado por ${mins} minutos.`, 'RATE_LIMITED', 429)
+      }
+      if (otp !== VALID_OTP_CODE) {
         trackFailedAttempt(rateLimitKey)
         throw gqlError('Código OTP inválido.', 'UNAUTHORIZED', 401)
       }

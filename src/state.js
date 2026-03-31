@@ -840,11 +840,16 @@ export function addTravelExpense(travelId, { type, description, amount, date }) 
 
 // ─── Rate limiting / failed attempts tracking ──────────────────────────────
 
+// Flash-compatible lockout: 3 attempts → 10min temp, 5 → permanent
 export function trackFailedAttempt(key) {
-  if (!_failedAttempts[key]) _failedAttempts[key] = { count: 0, lockedUntil: null }
+  if (!_failedAttempts[key]) _failedAttempts[key] = { count: 0, lockedUntil: null, permanent: false }
   _failedAttempts[key].count++
-  if (_failedAttempts[key].count >= 5) {
-    _failedAttempts[key].lockedUntil = Date.now() + 15 * 60 * 1000 // 15 min
+  const c = _failedAttempts[key].count
+  if (c >= 5) {
+    _failedAttempts[key].permanent = true
+    _failedAttempts[key].lockedUntil = null
+  } else if (c >= 3) {
+    _failedAttempts[key].lockedUntil = Date.now() + 10 * 60 * 1000
   }
   return _failedAttempts[key]
 }
@@ -852,12 +857,23 @@ export function trackFailedAttempt(key) {
 export function isRateLimited(key) {
   const entry = _failedAttempts[key]
   if (!entry) return false
+  if (entry.permanent) return true
   if (entry.lockedUntil && Date.now() < entry.lockedUntil) return true
   if (entry.lockedUntil && Date.now() >= entry.lockedUntil) {
     delete _failedAttempts[key]
     return false
   }
   return false
+}
+
+export function getLockoutInfo(key) {
+  const entry = _failedAttempts[key]
+  if (!entry) return { locked: false, permanent: false, remainingMs: 0, attempts: 0 }
+  if (entry.permanent) return { locked: true, permanent: true, remainingMs: 0, attempts: entry.count }
+  if (entry.lockedUntil && Date.now() < entry.lockedUntil) {
+    return { locked: true, permanent: false, remainingMs: entry.lockedUntil - Date.now(), attempts: entry.count }
+  }
+  return { locked: false, permanent: false, remainingMs: 0, attempts: entry.count }
 }
 
 export function clearFailedAttempts(key) { delete _failedAttempts[key] }
