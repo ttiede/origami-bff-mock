@@ -838,6 +838,119 @@ export const resolvers = {
 
     travelPolicy: () => getTravelPolicy(),
 
+    // ── Detail Queries (replace Flutter hardcoded mocks) ───────
+
+    statementFuture: (_, __, context) => {
+      const userId = requireAuth(context)
+      const wallets = getWallets(userId)
+      const items = []
+      const now = new Date()
+      wallets.forEach((w, i) => {
+        // Next deposit per wallet
+        items.push({
+          id: `fut-dep-${w.id}`, description: `Depósito ${w.nome}`,
+          amount: w.saldo * 0.3 + 100, date: new Date(now.getTime() + (i + 1) * 86400000 * 5).toISOString().slice(0, 10),
+          category: w.tipo, type: 'deposit', recurring: true,
+        })
+      })
+      // Recurring payments
+      items.push({ id: 'fut-spotify', description: 'Spotify Premium', amount: 21.90, date: new Date(now.getTime() + 86400000 * 15).toISOString().slice(0, 10), category: 'cultura', type: 'debit', recurring: true })
+      items.push({ id: 'fut-gym', description: 'Smart Fit', amount: 109.90, date: new Date(now.getTime() + 86400000 * 20).toISOString().slice(0, 10), category: 'saude', type: 'debit', recurring: true })
+      return items
+    },
+
+    pixCashInQr: (_, { amount, walletId }, context) => {
+      const userId = requireAuth(context)
+      const keys = getPixKeys(userId)
+      const key = keys?.[0]?.key || `${userId}@origami.com.br`
+      const code = `00020126580014br.gov.bcb.pix0136${key}${amount ? `5204000053039865406${amount.toFixed(2)}` : ''}6009SAO PAULO62070503***6304`
+      return { code, imageBase64: null, expiresAt: new Date(Date.now() + 3600000).toISOString(), pixKey: key, amount: amount || null }
+    },
+
+    expenseDetail: (_, { id }, context) => {
+      const userId = requireAuth(context)
+      const expenses = getExpenses(userId)
+      const exp = expenses.find(e => e.id === id)
+      if (!exp) return null
+      return {
+        ...exp, status: exp.status || 'pendente',
+        timeline: [
+          { status: 'criada', date: exp.date || new Date().toISOString(), actor: 'Colaborador' },
+          { status: 'submetida', date: new Date(Date.now() - 86400000).toISOString(), actor: 'Colaborador' },
+          ...(exp.status === 'aprovada' ? [{ status: 'aprovada', date: new Date().toISOString(), actor: 'Gestor', note: 'Aprovado conforme política' }] : []),
+        ],
+      }
+    },
+
+    advanceDetail: (_, { id }, context) => {
+      const userId = requireAuth(context)
+      const advances = getAdvances(userId)
+      const adv = advances.find(a => a.id === id)
+      if (!adv) return null
+      return {
+        ...adv, requestDate: adv.date || new Date().toISOString(),
+        approvalHistory: [
+          { status: 'solicitado', date: adv.date || new Date().toISOString(), actor: 'Colaborador' },
+          { status: adv.status || 'pendente', date: new Date().toISOString(), actor: 'Gestor' },
+        ],
+      }
+    },
+
+    reportDetail: (_, { id }, context) => {
+      const userId = requireAuth(context)
+      const reports = getReports(userId)
+      const rep = reports.find(r => r.id === id)
+      if (!rep) return null
+      const expenses = getExpenses(userId).slice(0, 3).map(e => ({ ...e, status: e.status || 'aprovada', timeline: [] }))
+      return { ...rep, expenses, advances: [], submittedAt: new Date().toISOString() }
+    },
+
+    approvalDetail: (_, { id }, context) => {
+      requireAuth(context)
+      const approvals = getApprovals()
+      const app = approvals.find(a => a.id === id)
+      if (!app) return null
+      return {
+        ...app, requester: app.solicitante || 'Colaborador', department: 'Comercial',
+        documents: [{ name: 'comprovante.pdf', type: 'PDF', url: 'https://mock.origami.com.br/docs/comprovante.pdf', size: '2.4 MB' }],
+        history: [
+          { status: 'solicitado', date: new Date(Date.now() - 172800000).toISOString(), actor: app.solicitante || 'Colaborador' },
+          { status: 'pendente', date: new Date().toISOString() },
+        ],
+      }
+    },
+
+    paymentMethods: (_, __, context) => {
+      const userId = requireAuth(context)
+      const wallets = getWallets(userId)
+      const cards = getCards(userId)
+      const methods = []
+      wallets.forEach(w => methods.push({ id: `w-${w.id}`, type: 'wallet', label: w.nome, balance: w.saldo, lastFour: null, brand: null }))
+      cards.filter(c => c.status === 'ativo').forEach(c => methods.push({ id: `c-${c.id}`, type: c.tipo === 'fisico' ? 'debit' : 'credit', label: `${c.bandeira?.nome || 'Visa'} •••• ${c.ultimosDigitos}`, balance: null, lastFour: c.ultimosDigitos, brand: c.bandeira?.nome || 'Visa' }))
+      return methods
+    },
+
+    reportApprovers: (_, __, context) => {
+      requireAuth(context)
+      return [
+        { id: '2', name: 'Maria Santos Ferreira', role: 'Gerente de RH', department: 'Recursos Humanos', email: 'maria.ferreira@industriaabc.com.br' },
+        { id: '4', name: 'Carlos Eduardo Mendes', role: 'Product Manager', department: 'Produto', email: 'carlos.mendes@techsolutions.com.br' },
+        { id: '8', name: 'Diego Nascimento', role: 'Diretor de Operações', department: 'Diretoria', email: 'diego.santos@megacorp.com.br' },
+      ]
+    },
+
+    searchAddresses: (_, { query }) => {
+      const q = query.toLowerCase()
+      const addresses = [
+        { id: 'addr-1', name: 'Av. Paulista, 1578', address: 'Bela Vista, São Paulo - SP', latitude: -23.5614, longitude: -46.6558, category: 'comercial' },
+        { id: 'addr-2', name: 'Rua Augusta, 2023', address: 'Consolação, São Paulo - SP', latitude: -23.5537, longitude: -46.6590, category: 'comercial' },
+        { id: 'addr-3', name: 'Shopping Ibirapuera', address: 'Av. Ibirapuera, 3103 - Moema, SP', latitude: -23.6098, longitude: -46.6674, category: 'shopping' },
+        { id: 'addr-4', name: 'Aeroporto de Congonhas', address: 'Av. Washington Luís, São Paulo - SP', latitude: -23.6261, longitude: -46.6564, category: 'transporte' },
+        { id: 'addr-5', name: 'Restaurante Figueira Rubaiyat', address: 'Rua Haddock Lobo, 1738 - Jardins, SP', latitude: -23.5614, longitude: -46.6720, category: 'alimentacao' },
+      ]
+      return addresses.filter(a => a.name.toLowerCase().includes(q) || a.address.toLowerCase().includes(q) || a.category.includes(q))
+    },
+
     // ── Flight Tickets ──────────────────────────────────────────
     flightTickets: () => [
       { id: 'FT001', airline: 'LATAM', flightNumber: 'LA3456', departure: 'GRU', arrival: 'GIG', departureTime: '2026-04-10T08:30:00', arrivalTime: '2026-04-10T09:45:00', seatClass: 'Econômica', price: 489.90, bookingRef: 'LATBR7X' },

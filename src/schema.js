@@ -425,6 +425,17 @@ export const typeDefs = /* GraphQL */ `
 
     # #170: Changelog / whats-new
     changelog: [ChangelogEntry!]!
+
+    # Detail queries (replace hardcoded mock data in Flutter screens)
+    statementFuture: [FutureTransaction!]!
+    pixCashInQr(amount: Float, walletId: ID): PixQrCode!
+    expenseDetail(id: ID!): ExpenseDetail
+    advanceDetail(id: ID!): AdvanceDetail
+    reportDetail(id: ID!): ReportDetail
+    approvalDetail(id: ID!): ApprovalDetail
+    paymentMethods: [PaymentMethod!]!
+    reportApprovers: [Approver!]!
+    searchAddresses(query: String!): [AddressResult!]!
   }
 
   # ─── Mutations ──────────────────────────────────────────────────────
@@ -1387,6 +1398,109 @@ export const typeDefs = /* GraphQL */ `
     maxHotelNight: Float!
     requiresPreApproval: Boolean!
     advanceDays: Int!
+  }
+
+  # ─── Detail types (replace hardcoded mock data) ─────────────────────
+
+  type FutureTransaction {
+    id: ID!
+    description: String!
+    amount: Float!
+    date: String!
+    category: String!
+    type: String!
+    recurring: Boolean
+  }
+
+  type PixQrCode {
+    code: String!
+    imageBase64: String
+    expiresAt: String
+    pixKey: String!
+    amount: Float
+  }
+
+  type ExpenseDetail {
+    id: ID!
+    description: String!
+    amount: Float!
+    category: String
+    date: String!
+    status: String!
+    timeline: [StatusTimelineEntry!]
+    location: String
+    receiptUrl: String
+  }
+
+  type StatusTimelineEntry {
+    status: String!
+    date: String!
+    actor: String
+    note: String
+  }
+
+  type AdvanceDetail {
+    id: ID!
+    amount: Float!
+    description: String!
+    status: String!
+    requestDate: String!
+    approvalHistory: [StatusTimelineEntry!]
+  }
+
+  type ReportDetail {
+    id: ID!
+    title: String!
+    totalAmount: Float!
+    status: String!
+    expenses: [ExpenseDetail!]
+    advances: [AdvanceDetail!]
+    submittedAt: String
+  }
+
+  type ApprovalDetail {
+    id: ID!
+    type: String!
+    requester: String!
+    department: String!
+    amount: Float!
+    status: String!
+    description: String
+    documents: [DocumentRef!]
+    history: [StatusTimelineEntry!]
+  }
+
+  type DocumentRef {
+    name: String!
+    type: String!
+    url: String!
+    size: String
+  }
+
+  type PaymentMethod {
+    id: ID!
+    type: String!
+    label: String!
+    balance: Float
+    lastFour: String
+    brand: String
+  }
+
+  type Approver {
+    id: ID!
+    name: String!
+    role: String!
+    department: String!
+    email: String
+  }
+
+  type AddressResult {
+    id: ID!
+    name: String!
+    address: String!
+    latitude: Float!
+    longitude: Float!
+    category: String
   }
 
   # ─── Flight Tickets ──────────────────────────────────────────────────
