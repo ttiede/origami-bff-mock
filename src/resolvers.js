@@ -223,6 +223,27 @@ function validateWalletTransaction(userId, walletId, amount, operationName) {
   return wallet
 }
 
+// ─── Helper: validate card for transaction ──────────────────────────────────
+function validateCardForTransaction(userId, cardId, amount) {
+  const card = requireCard(userId, cardId)
+  // Check card expiration
+  if (card.validade) {
+    const [month, year] = card.validade.split('/')
+    const expiry = new Date(2000 + parseInt(year), parseInt(month), 0)
+    if (expiry < new Date()) {
+      throw gqlError('Cartão expirado.', 'CARD_EXPIRED', 403)
+    }
+  }
+  // Check per-card spending limits
+  const limits = getCardSpendingLimits(cardId)
+  if (limits && amount) {
+    if (limits.transactionLimit && amount > limits.transactionLimit) {
+      throw gqlError(`Limite por transação excedido: R$${limits.transactionLimit}`, 'CARD_LIMIT_EXCEEDED', 422)
+    }
+  }
+  return card
+}
+
 // ─── Helper: validate card exists ────────────────────────────────────────────
 function requireCard(userId, cardId) {
   const cards = getCards(userId)
@@ -1135,7 +1156,7 @@ export const resolvers = {
           user: {
             id: String(user.id), fullName: user.nome,
             maskedCpf: `***.${user.cpf.slice(3, 9)}-**`,
-            email: user.email, roles: ['employee'],
+            email: user.email, roles: ['employee'], cargo: user.cargo || 'Colaborador', departamento: user.departamento || '', empresa: user.empresa || '',
           },
         }
       }
@@ -1157,7 +1178,7 @@ export const resolvers = {
         user: {
           id: String(user.id), fullName: user.nome,
           maskedCpf: `***.${user.cpf.slice(3, 9)}-**`,
-          email: user.email, roles: ['employee'],
+          email: user.email, roles: ['employee'], cargo: user.cargo || 'Colaborador', departamento: user.departamento || '', empresa: user.empresa || '',
         },
       }
     },
@@ -1183,7 +1204,7 @@ export const resolvers = {
         user: {
           id: String(user.id), fullName: user.nome,
           maskedCpf: `***.${user.cpf.slice(3, 9)}-**`,
-          email: user.email, roles: ['employee'],
+          email: user.email, roles: ['employee'], cargo: user.cargo || 'Colaborador', departamento: user.departamento || '', empresa: user.empresa || '',
         },
       }
     },
